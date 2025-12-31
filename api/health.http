@@ -1,0 +1,14 @@
+GET /health HTTP/1.1
+Accept: application/json
+Host: localhost:8080
+
+###
+GET /products HTTP/1.1
+Accept: application/json
+Host: localhost:8080
+
+
+###
+GET / HTTP/1.1
+Accept: application/json
+Host: localhost:8080
