@@ -13,14 +13,14 @@ var (
 
 func main() {
 	ajunRouter := ajun.NewRouter()
-	handler := ajun.Middleware(ajunRouter)
+	ajunRouter.RateLimiter()
 
 	ajunRouter.HandleFunc("/health", healthHandler)
 	ajunRouter.HandleFunc("/products", listProductsHandler)
 
 	addr := ":8080"
 	fmt.Println("Starting web server on port:", addr)
-	http.ListenAndServe(addr, handler)
+	http.ListenAndServe(addr, ajunRouter.Handler)
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {

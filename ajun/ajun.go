@@ -12,11 +12,32 @@ var (
 	requestEnabled = true
 )
 
-func NewRouter() *http.ServeMux {
+type ajun struct {
+	router  *http.ServeMux
+	Handler http.Handler
+}
+
+func newMux() *http.ServeMux {
 	return http.NewServeMux()
 }
 
-func Middleware(next http.Handler) http.Handler {
+func NewRouter() *ajun {
+	mux := newMux()
+	return &ajun{
+		router:  mux,
+		Handler: mux,
+	}
+}
+
+func (a *ajun) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
+	a.router.HandleFunc(pattern, handler)
+}
+
+func (a *ajun) RateLimiter() {
+	a.Handler = rateLimiter(a.router)
+}
+
+func rateLimiter(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if requestEnabled == false {
 			requestEnabled = false
