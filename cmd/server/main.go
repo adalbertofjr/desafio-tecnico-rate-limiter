@@ -6,11 +6,6 @@ import (
 	"net/http"
 )
 
-var (
-	remoteAddrs    = map[string]int{}
-	requestEnabled = true
-)
-
 func main() {
 	ajunRouter := ajun.NewRouter()
 	ajunRouter.RateLimiter()
