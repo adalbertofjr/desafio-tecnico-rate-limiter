@@ -9,11 +9,20 @@ import (
 )
 
 func TestRateLimiter_AllowsRequestsBelowLimit(t *testing.T) {
-	// Limpar maps e configurar parâmetros antes do teste
-	remoteAddrs = map[string]int{}
-	remoteAddrsDisable = map[string]time.Time{}
+	// Aguardar goroutines de testes anteriores finalizarem completamente
+	time.Sleep(2500 * time.Millisecond)
+
+	// Limpar completamente o estado antes do teste
+	remoteAddrs = make(map[string]int)
+	remoteAddrsDisable = make(map[string]time.Time)
 	remoteAddrMaxRequests = 5
-	remoteAddrTimeDelay = time.Second * 10
+	remoteAddrTimeDelay = time.Second * 1
+
+	// Cleanup após o teste
+	defer func() {
+		remoteAddrs = make(map[string]int)
+		remoteAddrsDisable = make(map[string]time.Time)
+	}()
 
 	router := NewRouter()
 	router.RateLimiter()
@@ -24,7 +33,7 @@ func TestRateLimiter_AllowsRequestsBelowLimit(t *testing.T) {
 	})
 	router.HandleFunc("/test", handler)
 
-	// Fazer 5 requisições (abaixo do limite de 5)
+	// Fazer 5 requisições (no limite de 5)
 	for i := 0; i < 5; i++ {
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
 		req.RemoteAddr = "192.168.1.1:12345"
@@ -39,11 +48,20 @@ func TestRateLimiter_AllowsRequestsBelowLimit(t *testing.T) {
 }
 
 func TestRateLimiter_BlocksRequestsAboveLimit(t *testing.T) {
-	// Limpar maps e configurar parâmetros antes do teste
-	remoteAddrs = map[string]int{}
-	remoteAddrsDisable = map[string]time.Time{}
+	// Aguardar goroutines de testes anteriores finalizarem completamente
+	time.Sleep(2500 * time.Millisecond)
+
+	// Limpar completamente o estado antes do teste
+	remoteAddrs = make(map[string]int)
+	remoteAddrsDisable = make(map[string]time.Time)
 	remoteAddrMaxRequests = 5
-	remoteAddrTimeDelay = time.Second * 10
+	remoteAddrTimeDelay = time.Second * 1
+
+	// Cleanup após o teste
+	defer func() {
+		remoteAddrs = make(map[string]int)
+		remoteAddrsDisable = make(map[string]time.Time)
+	}()
 
 	router := NewRouter()
 	router.RateLimiter()
@@ -80,11 +98,20 @@ func TestRateLimiter_BlocksRequestsAboveLimit(t *testing.T) {
 }
 
 func TestRateLimiter_UnblocksAfterTimeout(t *testing.T) {
-	// Limpar maps e configurar parâmetros antes do teste
-	remoteAddrs = map[string]int{}
-	remoteAddrsDisable = map[string]time.Time{}
-	remoteAddrMaxRequests = 5
-	remoteAddrTimeDelay = time.Second * 10
+	// Aguardar goroutines de testes anteriores finalizarem completamente
+	time.Sleep(2500 * time.Millisecond)
+
+	// Limpar completamente o estado antes do teste
+	remoteAddrs = make(map[string]int)
+	remoteAddrsDisable = make(map[string]time.Time)
+	remoteAddrMaxRequests = 3
+	remoteAddrTimeDelay = time.Second * 1
+
+	// Cleanup após o teste
+	defer func() {
+		remoteAddrs = make(map[string]int)
+		remoteAddrsDisable = make(map[string]time.Time)
+	}()
 
 	router := NewRouter()
 	router.RateLimiter()
@@ -95,8 +122,8 @@ func TestRateLimiter_UnblocksAfterTimeout(t *testing.T) {
 	})
 	router.HandleFunc("/test", handler)
 
-	// Fazer 6 requisições para bloquear
-	for i := 0; i < 6; i++ {
+	// Fazer 4 requisições para bloquear
+	for i := 0; i < 4; i++ {
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
 		req.RemoteAddr = "192.168.1.1:12345"
 		w := httptest.NewRecorder()
@@ -113,9 +140,9 @@ func TestRateLimiter_UnblocksAfterTimeout(t *testing.T) {
 		t.Errorf("Esperado bloqueio (429), recebeu %d", w.Code)
 	}
 
-	// Aguardar 11 segundos (tempo de bloqueio + margem)
-	t.Log("Aguardando 11 segundos para desbloqueio...")
-	time.Sleep(11 * time.Second)
+	// Aguardar timeout
+	t.Log("Aguardando 1.5 segundos para desbloqueio...")
+	time.Sleep(1500 * time.Millisecond)
 
 	// Verificar que foi desbloqueado
 	req = httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -129,11 +156,20 @@ func TestRateLimiter_UnblocksAfterTimeout(t *testing.T) {
 }
 
 func TestRateLimiter_DifferentIPsAreIndependent(t *testing.T) {
-	// Limpar maps e configurar parâmetros antes do teste
-	remoteAddrs = map[string]int{}
-	remoteAddrsDisable = map[string]time.Time{}
-	remoteAddrMaxRequests = 5
-	remoteAddrTimeDelay = time.Second * 10
+	// Aguardar goroutines de testes anteriores finalizarem completamente
+	time.Sleep(2500 * time.Millisecond)
+
+	// Limpar completamente o estado antes do teste
+	remoteAddrs = make(map[string]int)
+	remoteAddrsDisable = make(map[string]time.Time)
+	remoteAddrMaxRequests = 3
+	remoteAddrTimeDelay = time.Second * 1
+
+	// Cleanup após o teste
+	defer func() {
+		remoteAddrs = make(map[string]int)
+		remoteAddrsDisable = make(map[string]time.Time)
+	}()
 
 	router := NewRouter()
 	router.RateLimiter()
@@ -144,8 +180,8 @@ func TestRateLimiter_DifferentIPsAreIndependent(t *testing.T) {
 	})
 	router.HandleFunc("/test", handler)
 
-	// IP 1: fazer 6 requisições para bloquear
-	for i := 0; i < 6; i++ {
+	// IP 1: fazer 4 requisições para bloquear
+	for i := 0; i < 4; i++ {
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
 		req.RemoteAddr = "192.168.1.1:12345"
 		w := httptest.NewRecorder()
@@ -174,11 +210,20 @@ func TestRateLimiter_DifferentIPsAreIndependent(t *testing.T) {
 }
 
 func TestRateLimiter_ConcurrentRequests(t *testing.T) {
-	// Limpar maps e configurar parâmetros antes do teste
-	remoteAddrs = map[string]int{}
-	remoteAddrsDisable = map[string]time.Time{}
+	// Aguardar goroutines de testes anteriores finalizarem completamente
+	time.Sleep(2500 * time.Millisecond)
+
+	// Limpar completamente o estado antes do teste
+	remoteAddrs = make(map[string]int)
+	remoteAddrsDisable = make(map[string]time.Time)
 	remoteAddrMaxRequests = 5
-	remoteAddrTimeDelay = time.Second * 10
+	remoteAddrTimeDelay = time.Second * 1
+
+	// Cleanup após o teste
+	defer func() {
+		remoteAddrs = make(map[string]int)
+		remoteAddrsDisable = make(map[string]time.Time)
+	}()
 
 	router := NewRouter()
 	router.RateLimiter()
@@ -229,11 +274,20 @@ func TestRateLimiter_ConcurrentRequests(t *testing.T) {
 }
 
 func TestRateLimiter_HandlesIPv4AndIPv6(t *testing.T) {
-	// Limpar maps e configurar parâmetros antes do teste
-	remoteAddrs = map[string]int{}
-	remoteAddrsDisable = map[string]time.Time{}
+	// Aguardar goroutines de testes anteriores finalizarem completamente
+	time.Sleep(2500 * time.Millisecond)
+
+	// Limpar completamente o estado antes do teste
+	remoteAddrs = make(map[string]int)
+	remoteAddrsDisable = make(map[string]time.Time)
 	remoteAddrMaxRequests = 5
-	remoteAddrTimeDelay = time.Second * 10
+	remoteAddrTimeDelay = time.Second * 1
+
+	// Cleanup após o teste
+	defer func() {
+		remoteAddrs = make(map[string]int)
+		remoteAddrsDisable = make(map[string]time.Time)
+	}()
 
 	router := NewRouter()
 	router.RateLimiter()
