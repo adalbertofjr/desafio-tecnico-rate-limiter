@@ -3,7 +3,6 @@ package ajun
 import (
 	"adalbertofjr/desafio-rate-limiter/ajun/middleware"
 	"net/http"
-	"time"
 )
 
 type ajun struct {
@@ -27,7 +26,7 @@ func (a *ajun) HandleFunc(pattern string, handler func(http.ResponseWriter, *htt
 	a.router.HandleFunc(pattern, handler)
 }
 
-func (a *ajun) RateLimiter(limit int, delay time.Duration) {
-	rateLimiter := middleware.NewRateLimiter(limit, delay)
+func (a *ajun) RateLimiter(config middleware.RateLimiterConfig) {
+	rateLimiter := middleware.NewRateLimiter(config)
 	a.Handler = rateLimiter.RateLimiterHandler(a.router)
 }

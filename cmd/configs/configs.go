@@ -18,10 +18,10 @@ func LoadConfig(path string) (*Config, error) {
 	viper.SetConfigFile(".env")
 	viper.AutomaticEnv()
 
-	// viper.BindEnv("RATE_LIMITER_MAX_REQUESTS")
-	// viper.BindEnv("RATE_LIMITER_TIME_DELAY")
-	// viper.BindEnv("RATE_LIMITER_TOKEN_MAX_REQUESTS")
-	// viper.BindEnv("RATE_LIMITER_TOKEN_TIME_DELAY")
+	viper.BindEnv("RATE_LIMITER_MAX_REQUESTS")
+	viper.BindEnv("RATE_LIMITER_TIME_DELAY")
+	viper.BindEnv("RATE_LIMITER_TOKEN_MAX_REQUESTS")
+	viper.BindEnv("RATE_LIMITER_TOKEN_TIME_DELAY")
 
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, err

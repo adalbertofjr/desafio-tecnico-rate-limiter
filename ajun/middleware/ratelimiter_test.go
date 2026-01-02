@@ -12,18 +12,19 @@ func TestNewRateLimiter(t *testing.T) {
 	maxRequests := 10
 	timeDelay := time.Second * 5
 
-	rl := NewRateLimiter(maxRequests, timeDelay)
+	config := NewRateLimiterConfig(maxRequests, timeDelay, 0, 0)
+	rl := NewRateLimiter(config)
 
 	if rl == nil {
 		t.Fatal("NewRateLimiter retornou nil")
 	}
 
-	if rl.maxRequests != maxRequests {
-		t.Errorf("maxRequests: esperado %d, recebeu %d", maxRequests, rl.maxRequests)
+	if rl.config.Limit != maxRequests {
+		t.Errorf("Limit: esperado %d, recebeu %d", maxRequests, rl.config.Limit)
 	}
 
-	if rl.timeDelay != timeDelay {
-		t.Errorf("timeDelay: esperado %v, recebeu %v", timeDelay, rl.timeDelay)
+	if rl.config.Delay != timeDelay {
+		t.Errorf("Delay: esperado %v, recebeu %v", timeDelay, rl.config.Delay)
 	}
 
 	if rl.muRemoteAddrs == nil {
@@ -39,7 +40,8 @@ func TestRateLimiterHandler_AllowsRequestsBelowLimit(t *testing.T) {
 	ResetGlobalState()
 	defer ResetGlobalState()
 
-	rl := NewRateLimiter(5, time.Second*2)
+	config := NewRateLimiterConfig(5, time.Second*2, 0, 0)
+	rl := NewRateLimiter(config)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -70,7 +72,8 @@ func TestRateLimiterHandler_BlocksRequestsAboveLimit(t *testing.T) {
 	ResetGlobalState()
 	defer ResetGlobalState()
 
-	rl := NewRateLimiter(3, time.Second*2)
+	config := NewRateLimiterConfig(3, time.Second*2, 0, 0)
+	rl := NewRateLimiter(config)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -107,7 +110,8 @@ func TestRateLimiterHandler_ResetsAfterTimeout(t *testing.T) {
 	ResetGlobalState()
 	defer ResetGlobalState()
 
-	rl := NewRateLimiter(2, time.Millisecond*500)
+	config := NewRateLimiterConfig(2, time.Millisecond*500, 0, 0)
+	rl := NewRateLimiter(config)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -151,7 +155,8 @@ func TestRateLimiterHandler_DifferentIPsIndependent(t *testing.T) {
 	ResetGlobalState()
 	defer ResetGlobalState()
 
-	rl := NewRateLimiter(2, time.Second*2)
+	config := NewRateLimiterConfig(2, time.Second*2, 0, 0)
+	rl := NewRateLimiter(config)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -192,7 +197,8 @@ func TestRateLimiterHandler_HandlesIPv6(t *testing.T) {
 	ResetGlobalState()
 	defer ResetGlobalState()
 
-	rl := NewRateLimiter(5, time.Second*2)
+	config := NewRateLimiterConfig(5, time.Second*2, 0, 0)
+	rl := NewRateLimiter(config)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -215,7 +221,8 @@ func TestRateLimiterHandler_HandlesInvalidIP(t *testing.T) {
 	ResetGlobalState()
 	defer ResetGlobalState()
 
-	rl := NewRateLimiter(5, time.Second*2)
+	config := NewRateLimiterConfig(5, time.Second*2, 0, 0)
+	rl := NewRateLimiter(config)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -238,7 +245,8 @@ func TestRateLimiterHandler_ConcurrentRequests(t *testing.T) {
 	ResetGlobalState()
 	defer ResetGlobalState()
 
-	rl := NewRateLimiter(10, time.Second*2)
+	config := NewRateLimiterConfig(10, time.Second*2, 0, 0)
+	rl := NewRateLimiter(config)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -309,7 +317,8 @@ func TestRateLimiter_AddRemoteAddr(t *testing.T) {
 	ResetGlobalState()
 	defer ResetGlobalState()
 
-	rl := NewRateLimiter(5, time.Second)
+	config := NewRateLimiterConfig(5, time.Second, 0, 0)
+	rl := NewRateLimiter(config)
 
 	// Adicionar mesmo IP 3 vezes
 	for i := 0; i < 3; i++ {
@@ -329,10 +338,11 @@ func TestRateLimiter_IsRemoteAddrDisabled(t *testing.T) {
 	ResetGlobalState()
 	defer ResetGlobalState()
 
-	rl := NewRateLimiter(2, time.Millisecond*100)
+	config := NewRateLimiterConfig(2, time.Millisecond*100, 0, 0)
+	rl := NewRateLimiter(config)
 
 	// Não está desabilitado inicialmente
-	if rl.isRemoteAddrDisabled("192.168.1.1") {
+	if rl.isRemoteAddrDisabled("192.168.1.1", "") {
 		t.Error("IP não deveria estar desabilitado inicialmente")
 	}
 
@@ -342,7 +352,7 @@ func TestRateLimiter_IsRemoteAddrDisabled(t *testing.T) {
 	}
 
 	// Agora deve estar desabilitado
-	if !rl.isRemoteAddrDisabled("192.168.1.1") {
+	if !rl.isRemoteAddrDisabled("192.168.1.1", "") {
 		t.Error("IP deveria estar desabilitado após exceder limite")
 	}
 
@@ -350,7 +360,7 @@ func TestRateLimiter_IsRemoteAddrDisabled(t *testing.T) {
 	time.Sleep(150 * time.Millisecond)
 
 	// Deve estar habilitado novamente
-	if rl.isRemoteAddrDisabled("192.168.1.1") {
+	if rl.isRemoteAddrDisabled("192.168.1.1", "") {
 		t.Error("IP deveria estar habilitado após timeout")
 	}
 }
@@ -360,16 +370,224 @@ func TestRateLimiter_MultipleInstances(t *testing.T) {
 	defer ResetGlobalState()
 
 	// Criar duas instâncias com configurações diferentes
-	rl1 := NewRateLimiter(5, time.Second)
-	rl2 := NewRateLimiter(10, time.Second*2)
+	config1 := NewRateLimiterConfig(5, time.Second, 0, 0)
+	rl1 := NewRateLimiter(config1)
+	config2 := NewRateLimiterConfig(10, time.Second*2, 0, 0)
+	rl2 := NewRateLimiter(config2)
 
-	if rl1.maxRequests == rl2.maxRequests {
+	if rl1.config.Limit == rl2.config.Limit {
 		t.Error("Instâncias deveriam ter configurações diferentes")
 	}
 
-	if rl1.timeDelay == rl2.timeDelay {
-		t.Error("Instâncias deveriam ter timeDelay diferentes")
+	if rl1.config.Delay == rl2.config.Delay {
+		t.Error("Instâncias deveriam ter Delay diferentes")
 	}
 
 	// Nota: ambas compartilham estado global (limitação conhecida)
+}
+
+func TestRateLimiterHandler_WithAPIKey_AllowsRequestsBelowTokenLimit(t *testing.T) {
+	ResetGlobalState()
+	defer ResetGlobalState()
+
+	// Configurar: limite IP = 2, limite Token = 10
+	config := NewRateLimiterConfig(2, time.Second*2, 10, time.Second*2)
+	rl := NewRateLimiter(config)
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("success"))
+	})
+
+	wrappedHandler := rl.RateLimiterHandler(handler)
+
+	// Fazer 10 requisições com API_KEY (no limite de token)
+	for i := 0; i < 10; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.RemoteAddr = "10.0.0.10:12345"
+		req.Header.Set("Api_key", "token123")
+		w := httptest.NewRecorder()
+
+		wrappedHandler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Requisição %d com API_KEY: esperado 200, recebeu %d", i+1, w.Code)
+		}
+
+		if w.Body.String() != "success" {
+			t.Errorf("Requisição %d: body incorreto", i+1)
+		}
+	}
+}
+
+func TestRateLimiterHandler_WithAPIKey_BlocksRequestsAboveTokenLimit(t *testing.T) {
+	ResetGlobalState()
+	defer ResetGlobalState()
+
+	// Configurar: limite IP = 2, limite Token = 5
+	config := NewRateLimiterConfig(2, time.Second*2, 5, time.Second*2)
+	rl := NewRateLimiter(config)
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("success"))
+	})
+
+	wrappedHandler := rl.RateLimiterHandler(handler)
+
+	// Fazer 7 requisições com API_KEY (acima do limite token = 5)
+	for i := 0; i < 7; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.RemoteAddr = "10.0.0.11:12345"
+		req.Header.Set("Api_key", "token456")
+		w := httptest.NewRecorder()
+
+		wrappedHandler.ServeHTTP(w, req)
+
+		if i < 5 {
+			if w.Code != http.StatusOK {
+				t.Errorf("Requisição %d com API_KEY: esperado 200, recebeu %d", i+1, w.Code)
+			}
+		} else {
+			if w.Code != http.StatusTooManyRequests {
+				t.Errorf("Requisição %d com API_KEY: esperado 429, recebeu %d", i+1, w.Code)
+			}
+
+			if w.Body.String() != "Too many requests" {
+				t.Errorf("Requisição %d: mensagem incorreta: %s", i+1, w.Body.String())
+			}
+		}
+	}
+}
+
+func TestRateLimiterHandler_WithAPIKey_HasDifferentLimitThanIP(t *testing.T) {
+	// Aguardar goroutines de testes anteriores
+	time.Sleep(100 * time.Millisecond)
+	ResetGlobalState()
+	defer ResetGlobalState()
+
+	// Configurar: limite IP = 3, limite Token = 10
+	config := NewRateLimiterConfig(3, time.Second*2, 10, time.Second*2)
+	rl := NewRateLimiter(config)
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("success"))
+	})
+
+	wrappedHandler := rl.RateLimiterHandler(handler)
+
+	// Fazer 4 requisições SEM API_KEY (acima do limite IP = 3)
+	for i := 0; i < 4; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.RemoteAddr = "10.0.0.12:12345"
+		w := httptest.NewRecorder()
+
+		wrappedHandler.ServeHTTP(w, req)
+
+		if i < 3 {
+			if w.Code != http.StatusOK {
+				t.Errorf("Requisição %d sem API_KEY: esperado 200, recebeu %d", i+1, w.Code)
+			}
+		} else {
+			if w.Code != http.StatusTooManyRequests {
+				t.Errorf("Requisição %d sem API_KEY: esperado 429, recebeu %d", i+1, w.Code)
+			}
+		}
+	}
+}
+
+func TestRateLimiterHandler_WithAPIKey_UnblocksAfterTokenTimeout(t *testing.T) {
+	ResetGlobalState()
+	defer ResetGlobalState()
+
+	// Criar rate limiter com timeout curto para token
+	config := NewRateLimiterConfig(2, time.Second*2, 3, time.Millisecond*500)
+	rl := NewRateLimiter(config)
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	wrappedHandler := rl.RateLimiterHandler(handler)
+
+	// Fazer 4 requisições com API_KEY para bloquear (limite token é 3)
+	for i := 0; i < 4; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.RemoteAddr = "10.0.0.13:12345"
+		req.Header.Set("Api_key", "token789")
+		w := httptest.NewRecorder()
+		wrappedHandler.ServeHTTP(w, req)
+	}
+
+	// Verificar que está bloqueado
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.RemoteAddr = "10.0.0.13:12345"
+	req.Header.Set("Api_key", "token789")
+	w := httptest.NewRecorder()
+	wrappedHandler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("Esperado bloqueio (429), recebeu %d", w.Code)
+	}
+
+	// Aguardar timeout + margem
+	time.Sleep(600 * time.Millisecond)
+
+	// Verificar que foi desbloqueado
+	req = httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.RemoteAddr = "10.0.0.13:12345"
+	req.Header.Set("Api_key", "token789")
+	w = httptest.NewRecorder()
+	wrappedHandler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Com API_KEY após timeout: esperado 200, recebeu %d", w.Code)
+	}
+}
+
+func TestRateLimiterHandler_WithAPIKey_DifferentIPsSameKey(t *testing.T) {
+	ResetGlobalState()
+	defer ResetGlobalState()
+
+	// Configurar: limite IP = 2, limite Token = 5
+	config := NewRateLimiterConfig(2, time.Second*2, 5, time.Second*2)
+	rl := NewRateLimiter(config)
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	wrappedHandler := rl.RateLimiterHandler(handler)
+
+	// IP 1: fazer 6 requisições com API_KEY (acima do limite token = 5)
+	for i := 0; i < 6; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.RemoteAddr = "10.0.0.14:12345"
+		req.Header.Set("Api_key", "shared-token")
+		w := httptest.NewRecorder()
+		wrappedHandler.ServeHTTP(w, req)
+	}
+
+	// Verificar que IP 1 está bloqueado
+	req1 := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req1.RemoteAddr = "10.0.0.14:12345"
+	req1.Header.Set("Api_key", "shared-token")
+	w1 := httptest.NewRecorder()
+	wrappedHandler.ServeHTTP(w1, req1)
+
+	if w1.Code != http.StatusTooManyRequests {
+		t.Errorf("IP 1 com API_KEY: esperado bloqueio (429), recebeu %d", w1.Code)
+	}
+
+	// IP 2 com mesma API_KEY: fazer requisição (deve passar - limites são por IP)
+	req2 := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req2.RemoteAddr = "10.0.0.15:12345"
+	req2.Header.Set("Api_key", "shared-token")
+	w2 := httptest.NewRecorder()
+	wrappedHandler.ServeHTTP(w2, req2)
+
+	if w2.Code != http.StatusOK {
+		t.Errorf("IP 2 com mesma API_KEY: esperado 200, recebeu %d", w2.Code)
+	}
 }

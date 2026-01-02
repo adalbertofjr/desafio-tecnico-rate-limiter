@@ -2,6 +2,7 @@ package main
 
 import (
 	"adalbertofjr/desafio-rate-limiter/ajun"
+	"adalbertofjr/desafio-rate-limiter/ajun/middleware"
 	"adalbertofjr/desafio-rate-limiter/cmd/configs"
 	"fmt"
 	"net/http"
@@ -16,9 +17,17 @@ func main() {
 		fmt.Printf("Invalid duration format for RATE_LIMITER_TIME_DELAY: %s. Valid time units are \"ns\", \"us\" (or \"µs\"), \"ms\", \"s\", \"m\", \"h\"\n", config.RateLimiterTimeDelay)
 		panic(err)
 	}
+	tokenMaxRequests := config.RateLimiterTokenMaxRequests
+	tokenTimeDelay, err := time.ParseDuration(config.RateLimiterTokenTimeDelay)
+	if err != nil {
+		fmt.Printf("Invalid duration format for RATE_LIMITER_TOKEN_TIME_DELAY: %s. Valid time units are \"ns\", \"us\" (or \"µs\"), \"ms\", \"s\", \"m\", \"h\"\n", config.RateLimiterTokenTimeDelay)
+		panic(err)
+	}
+
+	rateLimiterConfig := middleware.NewRateLimiterConfig(limitMaxRequests, timeDelay, tokenMaxRequests, tokenTimeDelay)
 
 	ajunRouter := ajun.NewRouter()
-	ajunRouter.RateLimiter(limitMaxRequests, timeDelay)
+	ajunRouter.RateLimiter(rateLimiterConfig)
 
 	ajunRouter.HandleFunc("/health", healthHandler)
 	ajunRouter.HandleFunc("/products", listProductsHandler)

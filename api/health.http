@@ -7,6 +7,14 @@ GET /products HTTP/1.1
 Accept: application/json
 Host: localhost:8080
 
+###
+GET /products HTTP/1.1  
+Accept: application/json
+Host: localhost:8080
+API_KEY: 1234567890
+
+
+
 
 ###
 GET / HTTP/1.1

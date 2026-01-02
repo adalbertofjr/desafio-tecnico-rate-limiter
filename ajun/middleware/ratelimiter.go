@@ -17,16 +17,34 @@ var (
 type rateLimiter struct {
 	muRemoteAddrs        *sync.RWMutex
 	muRemoteAddrsDisable *sync.RWMutex
-	timeDelay            time.Duration
-	maxRequests          int
+	config               RateLimiterConfig
+	// timeDelay            time.Duration
+	// maxRequests          int
+	// tokenTimeDelay       time.Duration
+	// tokenMaxRequests     int
 }
 
-func NewRateLimiter(maxRequests int, timeDelay time.Duration) *rateLimiter {
+type RateLimiterConfig struct {
+	Limit      int
+	Delay      time.Duration
+	TokenLimit int
+	TokenDelay time.Duration
+}
+
+func NewRateLimiter(config RateLimiterConfig) *rateLimiter {
 	return &rateLimiter{
 		muRemoteAddrs:        &sync.RWMutex{},
 		muRemoteAddrsDisable: &sync.RWMutex{},
-		timeDelay:            timeDelay,
-		maxRequests:          maxRequests,
+		config:               config,
+	}
+}
+
+func NewRateLimiterConfig(limit int, delay time.Duration, tokenLimit int, tokenDelay time.Duration) RateLimiterConfig {
+	return RateLimiterConfig{
+		Limit:      limit,
+		Delay:      delay,
+		TokenLimit: tokenLimit,
+		TokenDelay: tokenDelay,
 	}
 }
 
@@ -40,7 +58,9 @@ func (rl *rateLimiter) RateLimiterHandler(next http.Handler) http.Handler {
 
 		rl.addRemoteAddr(host)
 
-		if rl.isRemoteAddrDisabled(host) {
+		apiToken := r.Header.Get("Api_key")
+
+		if rl.isRemoteAddrDisabled(host, apiToken) {
 			w.WriteHeader(http.StatusTooManyRequests)
 			w.Write([]byte("Too many requests"))
 			return
@@ -67,13 +87,21 @@ func (rl *rateLimiter) resetRemoteAddrs(host string) {
 	rl.muRemoteAddrsDisable.Unlock()
 }
 
-func (rl *rateLimiter) addRemoteAddrDisable(host string) {
+func (rl *rateLimiter) addRemoteAddrDisable(host string, apiToken string) {
+	// Definir limites para tokens de API, se fornecidos
+	var timeDelay time.Duration
+	if apiToken != "" {
+		timeDelay = rl.config.TokenDelay
+	} else {
+		timeDelay = rl.config.Delay
+	}
+
 	rl.muRemoteAddrsDisable.Lock()
 	defer rl.muRemoteAddrsDisable.Unlock()
-	remoteAddrsDisable[host] = time.Now().Add(rl.timeDelay)
+	remoteAddrsDisable[host] = time.Now().Add(timeDelay)
 }
 
-func (rl *rateLimiter) isRemoteAddrDisabled(host string) bool {
+func (rl *rateLimiter) isRemoteAddrDisabled(host string, apiToken string) bool {
 	rl.muRemoteAddrsDisable.RLock()
 	timeDisable, exists := remoteAddrsDisable[host]
 	rl.muRemoteAddrsDisable.RUnlock()
@@ -86,15 +114,25 @@ func (rl *rateLimiter) isRemoteAddrDisabled(host string) bool {
 	hostCountRequests := remoteAddrs[host]
 	rl.muRemoteAddrs.RUnlock()
 
-	if hostCountRequests > rl.maxRequests && !exists {
+	var maxRequests int
+	var timeDelay time.Duration
+	if apiToken != "" {
+		maxRequests = rl.config.TokenLimit
+		timeDelay = rl.config.TokenDelay
+	} else {
+		maxRequests = rl.config.Limit
+		timeDelay = rl.config.Delay
+	}
+
+	if hostCountRequests > maxRequests && !exists {
 
 		go func() {
-			rl.addRemoteAddrDisable(host)
+			rl.addRemoteAddrDisable(host, apiToken)
 			fmt.Printf("Disable host: %s - %s\n", host, time.Now().Format(time.TimeOnly))
 		}()
 
 		go func() {
-			time.Sleep(rl.timeDelay)
+			time.Sleep(timeDelay)
 			rl.resetRemoteAddrs(host)
 			fmt.Printf("Enable host: %s - %s\n", host, time.Now().Format(time.TimeOnly))
 		}()
