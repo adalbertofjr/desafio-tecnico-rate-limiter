@@ -12,8 +12,6 @@ import (
 var (
 	remoteAddrs        = map[string]int{}
 	remoteAddrsDisable = map[string]time.Time{}
-	// remoteAddrTimeDelay   = time.Second * 5
-	// remoteAddrMaxRequests = 4
 )
 
 type rateLimiter struct {
