@@ -1,6 +1,7 @@
 package ajun
 
 import (
+	"adalbertofjr/desafio-rate-limiter/ajun/middleware"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -9,23 +10,11 @@ import (
 )
 
 func TestRateLimiter_AllowsRequestsBelowLimit(t *testing.T) {
-	// Aguardar goroutines de testes anteriores finalizarem completamente
-	time.Sleep(2500 * time.Millisecond)
-
-	// Limpar completamente o estado antes do teste
-	remoteAddrs = make(map[string]int)
-	remoteAddrsDisable = make(map[string]time.Time)
-	remoteAddrMaxRequests = 5
-	remoteAddrTimeDelay = time.Second * 1
-
-	// Cleanup após o teste
-	defer func() {
-		remoteAddrs = make(map[string]int)
-		remoteAddrsDisable = make(map[string]time.Time)
-	}()
+	// Limpar estado global antes do teste
+	middleware.ResetGlobalState()
 
 	router := NewRouter()
-	router.RateLimiter()
+	router.RateLimiter(5, time.Second*4)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -48,23 +37,11 @@ func TestRateLimiter_AllowsRequestsBelowLimit(t *testing.T) {
 }
 
 func TestRateLimiter_BlocksRequestsAboveLimit(t *testing.T) {
-	// Aguardar goroutines de testes anteriores finalizarem completamente
-	time.Sleep(2500 * time.Millisecond)
-
-	// Limpar completamente o estado antes do teste
-	remoteAddrs = make(map[string]int)
-	remoteAddrsDisable = make(map[string]time.Time)
-	remoteAddrMaxRequests = 5
-	remoteAddrTimeDelay = time.Second * 1
-
-	// Cleanup após o teste
-	defer func() {
-		remoteAddrs = make(map[string]int)
-		remoteAddrsDisable = make(map[string]time.Time)
-	}()
+	// Limpar estado global antes do teste
+	middleware.ResetGlobalState()
 
 	router := NewRouter()
-	router.RateLimiter()
+	router.RateLimiter(5, time.Second*4)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -98,23 +75,15 @@ func TestRateLimiter_BlocksRequestsAboveLimit(t *testing.T) {
 }
 
 func TestRateLimiter_UnblocksAfterTimeout(t *testing.T) {
-	// Aguardar goroutines de testes anteriores finalizarem completamente
-	time.Sleep(2500 * time.Millisecond)
+	// Aguardar goroutines de testes anteriores (estado global compartilhado)
+	time.Sleep(500 * time.Millisecond)
+	// Limpar estado global antes do teste
+	middleware.ResetGlobalState()
 
-	// Limpar completamente o estado antes do teste
-	remoteAddrs = make(map[string]int)
-	remoteAddrsDisable = make(map[string]time.Time)
-	remoteAddrMaxRequests = 3
-	remoteAddrTimeDelay = time.Second * 1
-
-	// Cleanup após o teste
-	defer func() {
-		remoteAddrs = make(map[string]int)
-		remoteAddrsDisable = make(map[string]time.Time)
-	}()
-
+	// Criar router com timeout curto para teste
+	rateLimiter := middleware.NewRateLimiter(3, time.Second*1)
 	router := NewRouter()
-	router.RateLimiter()
+	router.Handler = rateLimiter.RateLimiterHandler(router.router)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -122,7 +91,7 @@ func TestRateLimiter_UnblocksAfterTimeout(t *testing.T) {
 	})
 	router.HandleFunc("/test", handler)
 
-	// Fazer 4 requisições para bloquear
+	// Fazer 4 requisições para bloquear (limite é 3)
 	for i := 0; i < 4; i++ {
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
 		req.RemoteAddr = "192.168.1.1:12345"
@@ -156,23 +125,13 @@ func TestRateLimiter_UnblocksAfterTimeout(t *testing.T) {
 }
 
 func TestRateLimiter_DifferentIPsAreIndependent(t *testing.T) {
-	// Aguardar goroutines de testes anteriores finalizarem completamente
-	time.Sleep(2500 * time.Millisecond)
+	// Limpar estado global antes do teste
+	middleware.ResetGlobalState()
 
-	// Limpar completamente o estado antes do teste
-	remoteAddrs = make(map[string]int)
-	remoteAddrsDisable = make(map[string]time.Time)
-	remoteAddrMaxRequests = 3
-	remoteAddrTimeDelay = time.Second * 1
-
-	// Cleanup após o teste
-	defer func() {
-		remoteAddrs = make(map[string]int)
-		remoteAddrsDisable = make(map[string]time.Time)
-	}()
-
+	// Criar router com limite de 3 requisições
+	rateLimiter := middleware.NewRateLimiter(3, time.Second*1)
 	router := NewRouter()
-	router.RateLimiter()
+	router.Handler = rateLimiter.RateLimiterHandler(router.router)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -180,7 +139,7 @@ func TestRateLimiter_DifferentIPsAreIndependent(t *testing.T) {
 	})
 	router.HandleFunc("/test", handler)
 
-	// IP 1: fazer 4 requisições para bloquear
+	// IP 1: fazer 4 requisições para bloquear (limite é 3)
 	for i := 0; i < 4; i++ {
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
 		req.RemoteAddr = "192.168.1.1:12345"
@@ -210,23 +169,11 @@ func TestRateLimiter_DifferentIPsAreIndependent(t *testing.T) {
 }
 
 func TestRateLimiter_ConcurrentRequests(t *testing.T) {
-	// Aguardar goroutines de testes anteriores finalizarem completamente
-	time.Sleep(2500 * time.Millisecond)
-
-	// Limpar completamente o estado antes do teste
-	remoteAddrs = make(map[string]int)
-	remoteAddrsDisable = make(map[string]time.Time)
-	remoteAddrMaxRequests = 5
-	remoteAddrTimeDelay = time.Second * 1
-
-	// Cleanup após o teste
-	defer func() {
-		remoteAddrs = make(map[string]int)
-		remoteAddrsDisable = make(map[string]time.Time)
-	}()
+	// Limpar estado global antes do teste
+	middleware.ResetGlobalState()
 
 	router := NewRouter()
-	router.RateLimiter()
+	router.RateLimiter(5, time.Second*4)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -274,23 +221,11 @@ func TestRateLimiter_ConcurrentRequests(t *testing.T) {
 }
 
 func TestRateLimiter_HandlesIPv4AndIPv6(t *testing.T) {
-	// Aguardar goroutines de testes anteriores finalizarem completamente
-	time.Sleep(2500 * time.Millisecond)
-
-	// Limpar completamente o estado antes do teste
-	remoteAddrs = make(map[string]int)
-	remoteAddrsDisable = make(map[string]time.Time)
-	remoteAddrMaxRequests = 5
-	remoteAddrTimeDelay = time.Second * 1
-
-	// Cleanup após o teste
-	defer func() {
-		remoteAddrs = make(map[string]int)
-		remoteAddrsDisable = make(map[string]time.Time)
-	}()
+	// Limpar estado global antes do teste
+	middleware.ResetGlobalState()
 
 	router := NewRouter()
-	router.RateLimiter()
+	router.RateLimiter(5, time.Second*4)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

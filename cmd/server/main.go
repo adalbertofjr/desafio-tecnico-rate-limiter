@@ -4,11 +4,12 @@ import (
 	"adalbertofjr/desafio-rate-limiter/ajun"
 	"fmt"
 	"net/http"
+	"time"
 )
 
 func main() {
 	ajunRouter := ajun.NewRouter()
-	ajunRouter.RateLimiter()
+	ajunRouter.RateLimiter(5, time.Second*5)
 
 	ajunRouter.HandleFunc("/health", healthHandler)
 	ajunRouter.HandleFunc("/products", listProductsHandler)
