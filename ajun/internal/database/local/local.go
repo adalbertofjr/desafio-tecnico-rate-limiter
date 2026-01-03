@@ -7,7 +7,17 @@ import (
 	"time"
 )
 
-type DataSource struct {
+type Storage interface {
+	AddClientIP(clientIP string)
+	DisableClientIP(clientIP string, duration time.Duration)
+	GetTimeDisabledClientIP(clientIP string) (time.Time, bool)
+	GetClientIPCount(clientIP string) int
+	ListClientIPs() map[string]int
+	ResetClientIP(clientIP string)
+	ResetDataClientIPs()
+}
+
+type LocalStorage struct {
 	mu          sync.RWMutex
 	timeCleanIn time.Duration
 	ttl         time.Duration
@@ -20,8 +30,8 @@ type ClientIPData struct {
 	disableUntil time.Time
 }
 
-func InitDataSource(ctx context.Context, timeCleanIn time.Duration, ttl time.Duration) *DataSource {
-	dataSource := &DataSource{
+func NewLocalStorage(ctx context.Context, timeCleanIn time.Duration, ttl time.Duration) Storage {
+	dataSource := &LocalStorage{
 		timeCleanIn: timeCleanIn,
 		ttl:         ttl,
 		clients:     make(map[string]*ClientIPData),
@@ -32,7 +42,7 @@ func InitDataSource(ctx context.Context, timeCleanIn time.Duration, ttl time.Dur
 	return dataSource
 }
 
-func (ds *DataSource) AddClientIP(clientIP string) {
+func (ds *LocalStorage) AddClientIP(clientIP string) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 
@@ -45,7 +55,7 @@ func (ds *DataSource) AddClientIP(clientIP string) {
 	data.time = time.Now()
 }
 
-func (ds *DataSource) DisableClientIP(clientIP string, duration time.Duration) {
+func (ds *LocalStorage) DisableClientIP(clientIP string, duration time.Duration) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 
@@ -58,7 +68,7 @@ func (ds *DataSource) DisableClientIP(clientIP string, duration time.Duration) {
 	data.disableUntil = time.Now().Add(duration)
 }
 
-func (ds *DataSource) GetTimeDisabledClientIP(clientIP string) (time.Time, bool) {
+func (ds *LocalStorage) GetTimeDisabledClientIP(clientIP string) (time.Time, bool) {
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
 
@@ -69,7 +79,7 @@ func (ds *DataSource) GetTimeDisabledClientIP(clientIP string) (time.Time, bool)
 	return data.disableUntil, true
 }
 
-func (ds *DataSource) GetClientIPCount(clientIP string) int {
+func (ds *LocalStorage) GetClientIPCount(clientIP string) int {
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
 
@@ -79,7 +89,7 @@ func (ds *DataSource) GetClientIPCount(clientIP string) int {
 	return 0
 }
 
-func (ds *DataSource) listClientIPs() map[string]int {
+func (ds *LocalStorage) ListClientIPs() map[string]int {
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
 
@@ -90,21 +100,21 @@ func (ds *DataSource) listClientIPs() map[string]int {
 	return clientIPs
 }
 
-func (ds *DataSource) ResetClientIP(clientIP string) {
+func (ds *LocalStorage) ResetClientIP(clientIP string) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 
 	delete(ds.clients, clientIP)
 }
 
-func (ds *DataSource) ResetDataClientIPs() {
+func (ds *LocalStorage) ResetDataClientIPs() {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 
 	ds.clients = make(map[string]*ClientIPData)
 }
 
-func (ds *DataSource) StartCleanupWorker(ctx context.Context) {
+func (ds *LocalStorage) StartCleanupWorker(ctx context.Context) {
 	ticker := time.NewTicker(ds.timeCleanIn)
 	defer ticker.Stop()
 
@@ -119,7 +129,7 @@ func (ds *DataSource) StartCleanupWorker(ctx context.Context) {
 	}
 }
 
-func (ds *DataSource) cleanupOldData(ttl time.Duration) {
+func (ds *LocalStorage) cleanupOldData(ttl time.Duration) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 

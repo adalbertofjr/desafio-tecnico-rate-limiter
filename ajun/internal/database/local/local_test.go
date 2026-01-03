@@ -8,7 +8,7 @@ import (
 )
 
 func TestCleanupOldData_RemovesStaleEntries(t *testing.T) {
-	ds := &DataSource{
+	ds := &LocalStorage{
 		clients: make(map[string]*ClientIPData),
 	}
 
@@ -42,7 +42,7 @@ func TestCleanupOldData_RemovesStaleEntries(t *testing.T) {
 }
 
 func TestCleanupOldData_RespectsActiveBlocks(t *testing.T) {
-	ds := &DataSource{
+	ds := &LocalStorage{
 		clients: make(map[string]*ClientIPData),
 	}
 
@@ -79,7 +79,7 @@ func TestCleanupOldData_RespectsActiveBlocks(t *testing.T) {
 
 func TestCleanupWorker_StopsOnContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	ds := &DataSource{
+	ds := &LocalStorage{
 		timeCleanIn: 100 * time.Millisecond,
 		ttl:         1 * time.Second,
 		clients:     make(map[string]*ClientIPData),
@@ -106,7 +106,7 @@ func TestCleanupWorker_RunsPeriodically(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ds := &DataSource{
+	ds := &LocalStorage{
 		timeCleanIn: 200 * time.Millisecond,
 		ttl:         1 * time.Second,
 		clients:     make(map[string]*ClientIPData),
@@ -137,7 +137,7 @@ func TestCleanupWorker_RunsPeriodically(t *testing.T) {
 }
 
 func TestCleanupOldData_ThreadSafe(t *testing.T) {
-	ds := &DataSource{
+	ds := &LocalStorage{
 		clients: make(map[string]*ClientIPData),
 	}
 
@@ -164,7 +164,7 @@ func TestCleanupOldData_ThreadSafe(t *testing.T) {
 	// Ler dados concorrentemente
 	for i := 0; i < 50; i++ {
 		go func() {
-			ds.listClientIPs()
+			ds.ListClientIPs()
 		}()
 	}
 
@@ -172,7 +172,7 @@ func TestCleanupOldData_ThreadSafe(t *testing.T) {
 }
 
 func TestCleanupOldData_EmptyMap(t *testing.T) {
-	ds := &DataSource{
+	ds := &LocalStorage{
 		clients: make(map[string]*ClientIPData),
 	}
 
@@ -185,7 +185,7 @@ func TestCleanupOldData_EmptyMap(t *testing.T) {
 }
 
 func TestCleanupOldData_MultipleStaleEntries(t *testing.T) {
-	ds := &DataSource{
+	ds := &LocalStorage{
 		clients: make(map[string]*ClientIPData),
 	}
 

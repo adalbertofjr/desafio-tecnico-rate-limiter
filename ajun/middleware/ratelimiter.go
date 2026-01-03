@@ -12,7 +12,7 @@ import (
 
 type rateLimiter struct {
 	config     RateLimiterConfig
-	datasource *local.DataSource
+	datasource local.Storage
 }
 
 type RateLimiterConfig struct {
@@ -27,7 +27,7 @@ type RateLimiterConfig struct {
 func NewRateLimiter(ctx context.Context, config RateLimiterConfig) *rateLimiter {
 	return &rateLimiter{
 		config:     config,
-		datasource: local.InitDataSource(ctx, config.TimeCleanIn, config.TTL),
+		datasource: local.NewLocalStorage(ctx, config.TimeCleanIn, config.TTL),
 	}
 }
 
