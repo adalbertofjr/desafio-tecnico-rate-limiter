@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"adalbertofjr/desafio-rate-limiter/ajun/internal/database/local"
 	"fmt"
 	"net"
 	"net/http"
@@ -9,19 +10,11 @@ import (
 	"time"
 )
 
-var (
-	remoteAddrs        = map[string]int{}
-	remoteAddrsDisable = map[string]time.Time{}
-)
-
 type rateLimiter struct {
 	muRemoteAddrs        *sync.RWMutex
 	muRemoteAddrsDisable *sync.RWMutex
 	config               RateLimiterConfig
-	// timeDelay            time.Duration
-	// maxRequests          int
-	// tokenTimeDelay       time.Duration
-	// tokenMaxRequests     int
+	datasource           *local.DataSource
 }
 
 type RateLimiterConfig struct {
@@ -36,6 +29,7 @@ func NewRateLimiter(config RateLimiterConfig) *rateLimiter {
 		muRemoteAddrs:        &sync.RWMutex{},
 		muRemoteAddrsDisable: &sync.RWMutex{},
 		config:               config,
+		datasource:           local.InitDataSource(),
 	}
 }
 
@@ -51,16 +45,15 @@ func NewRateLimiterConfig(limit int, delay time.Duration, tokenLimit int, tokenD
 func (rl *rateLimiter) RateLimiterHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := r.RemoteAddr
-		host, _, err := net.SplitHostPort(ip)
+		clientIP, _, err := net.SplitHostPort(ip)
 		if err != nil {
-			host = strings.Split(ip, ":")[0]
+			clientIP = strings.Split(ip, ":")[0]
 		}
 
-		rl.addRemoteAddr(host)
-
+		rl.datasource.AddClientIP(clientIP)
 		apiToken := r.Header.Get("Api_key")
 
-		if rl.isRemoteAddrDisabled(host, apiToken) {
+		if rl.isRemoteAddrDisabled(clientIP, apiToken) {
 			w.WriteHeader(http.StatusTooManyRequests)
 			w.Write([]byte("Too many requests"))
 			return
@@ -68,23 +61,6 @@ func (rl *rateLimiter) RateLimiterHandler(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
-}
-
-func (rl *rateLimiter) addRemoteAddr(host string) {
-	rl.muRemoteAddrs.Lock()
-	defer rl.muRemoteAddrs.Unlock()
-	remoteAddrs[host]++
-	fmt.Printf("Request host: %s; QTD: %d; %s\n", host, remoteAddrs[host], time.Now().Format(time.TimeOnly))
-}
-
-func (rl *rateLimiter) resetRemoteAddrs(host string) {
-	rl.muRemoteAddrs.Lock()
-	remoteAddrs[host] = 0
-	rl.muRemoteAddrs.Unlock()
-
-	rl.muRemoteAddrsDisable.Lock()
-	delete(remoteAddrsDisable, host)
-	rl.muRemoteAddrsDisable.Unlock()
 }
 
 func (rl *rateLimiter) addRemoteAddrDisable(host string, apiToken string) {
@@ -97,13 +73,14 @@ func (rl *rateLimiter) addRemoteAddrDisable(host string, apiToken string) {
 	}
 
 	rl.muRemoteAddrsDisable.Lock()
-	defer rl.muRemoteAddrsDisable.Unlock()
-	remoteAddrsDisable[host] = time.Now().Add(timeDelay)
+	rl.datasource.DisableClientIP(host, timeDelay)
+	rl.muRemoteAddrsDisable.Unlock()
 }
 
 func (rl *rateLimiter) isRemoteAddrDisabled(host string, apiToken string) bool {
 	rl.muRemoteAddrsDisable.RLock()
-	timeDisable, exists := remoteAddrsDisable[host]
+
+	timeDisable, exists := rl.datasource.GetTimeDisabledClientIP(host)
 	rl.muRemoteAddrsDisable.RUnlock()
 
 	if exists && timeDisable.After(time.Now()) {
@@ -111,7 +88,7 @@ func (rl *rateLimiter) isRemoteAddrDisabled(host string, apiToken string) bool {
 	}
 
 	rl.muRemoteAddrs.RLock()
-	hostCountRequests := remoteAddrs[host]
+	hostCountRequests := rl.datasource.GetClientIPCount(host)
 	rl.muRemoteAddrs.RUnlock()
 
 	var maxRequests int
@@ -133,7 +110,7 @@ func (rl *rateLimiter) isRemoteAddrDisabled(host string, apiToken string) bool {
 
 		go func() {
 			time.Sleep(timeDelay)
-			rl.resetRemoteAddrs(host)
+			rl.datasource.ResetClientIP(host)
 			fmt.Printf("Enable host: %s - %s\n", host, time.Now().Format(time.TimeOnly))
 		}()
 		return true
@@ -142,12 +119,6 @@ func (rl *rateLimiter) isRemoteAddrDisabled(host string, apiToken string) bool {
 	return false
 }
 
-func ResetGlobalState() {
-	remoteAddrs = map[string]int{}
-	remoteAddrsDisable = map[string]time.Time{}
+func (rl *rateLimiter) ResetGlobalState() {
+	rl.datasource.ResetDataClientIPs()
 }
-
-// func ConfigureRateLimiter(maxRequests int, timeDelay time.Duration) {
-// 	remoteAddrMaxRequests = maxRequests
-// 	remoteAddrTimeDelay = timeDelay
-// }

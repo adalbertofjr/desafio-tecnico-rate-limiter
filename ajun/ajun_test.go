@@ -10,12 +10,10 @@ import (
 )
 
 func TestRateLimiter_AllowsRequestsBelowLimit(t *testing.T) {
-	// Limpar estado global antes do teste
-	middleware.ResetGlobalState()
-
 	router := NewRouter()
 	config := middleware.NewRateLimiterConfig(5, time.Second*4, 0, 0)
 	router.RateLimiter(config)
+	defer router.ResetGlobalState()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -38,12 +36,10 @@ func TestRateLimiter_AllowsRequestsBelowLimit(t *testing.T) {
 }
 
 func TestRateLimiter_BlocksRequestsAboveLimit(t *testing.T) {
-	// Limpar estado global antes do teste
-	middleware.ResetGlobalState()
-
 	router := NewRouter()
 	config := middleware.NewRateLimiterConfig(5, time.Second*4, 0, 0)
 	router.RateLimiter(config)
+	defer router.ResetGlobalState()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -79,12 +75,11 @@ func TestRateLimiter_BlocksRequestsAboveLimit(t *testing.T) {
 func TestRateLimiter_UnblocksAfterTimeout(t *testing.T) {
 	// Aguardar goroutines de testes anteriores
 	time.Sleep(200 * time.Millisecond)
-	// Limpar estado global antes do teste
-	middleware.ResetGlobalState()
 
 	// Criar router com timeout curto para teste
 	config := middleware.NewRateLimiterConfig(3, time.Second*1, 0, 0)
 	rateLimiter := middleware.NewRateLimiter(config)
+	defer rateLimiter.ResetGlobalState()
 	router := NewRouter()
 	router.Handler = rateLimiter.RateLimiterHandler(router.router)
 
@@ -128,12 +123,10 @@ func TestRateLimiter_UnblocksAfterTimeout(t *testing.T) {
 }
 
 func TestRateLimiter_DifferentIPsAreIndependent(t *testing.T) {
-	// Limpar estado global antes do teste
-	middleware.ResetGlobalState()
-
 	// Criar router com limite de 3 requisições
 	config := middleware.NewRateLimiterConfig(3, time.Second*1, 0, 0)
 	rateLimiter := middleware.NewRateLimiter(config)
+	defer rateLimiter.ResetGlobalState()
 	router := NewRouter()
 	router.Handler = rateLimiter.RateLimiterHandler(router.router)
 
@@ -173,12 +166,10 @@ func TestRateLimiter_DifferentIPsAreIndependent(t *testing.T) {
 }
 
 func TestRateLimiter_ConcurrentRequests(t *testing.T) {
-	// Limpar estado global antes do teste
-	middleware.ResetGlobalState()
-
 	router := NewRouter()
 	config := middleware.NewRateLimiterConfig(5, time.Second*4, 0, 0)
 	router.RateLimiter(config)
+	defer router.ResetGlobalState()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -226,12 +217,10 @@ func TestRateLimiter_ConcurrentRequests(t *testing.T) {
 }
 
 func TestRateLimiter_HandlesIPv4AndIPv6(t *testing.T) {
-	// Limpar estado global antes do teste
-	middleware.ResetGlobalState()
-
 	router := NewRouter()
 	config := middleware.NewRateLimiterConfig(5, time.Second*4, 0, 0)
 	router.RateLimiter(config)
+	defer router.ResetGlobalState()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -260,13 +249,11 @@ func TestRateLimiter_HandlesIPv4AndIPv6(t *testing.T) {
 }
 
 func TestRateLimiter_WithAPIKey_AllowsRequestsBelowTokenLimit(t *testing.T) {
-	// Limpar estado global antes do teste
-	middleware.ResetGlobalState()
-
 	router := NewRouter()
 	// Configurar: limite IP = 2, limite Token = 10
 	config := middleware.NewRateLimiterConfig(2, time.Second*4, 10, time.Second*4)
 	router.RateLimiter(config)
+	defer router.ResetGlobalState()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -290,13 +277,11 @@ func TestRateLimiter_WithAPIKey_AllowsRequestsBelowTokenLimit(t *testing.T) {
 }
 
 func TestRateLimiter_WithAPIKey_BlocksRequestsAboveTokenLimit(t *testing.T) {
-	// Limpar estado global antes do teste
-	middleware.ResetGlobalState()
-
 	router := NewRouter()
 	// Configurar: limite IP = 2, limite Token = 5
 	config := middleware.NewRateLimiterConfig(2, time.Second*4, 5, time.Second*4)
 	router.RateLimiter(config)
+	defer router.ResetGlobalState()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -328,13 +313,12 @@ func TestRateLimiter_WithAPIKey_BlocksRequestsAboveTokenLimit(t *testing.T) {
 func TestRateLimiter_WithAPIKey_HasDifferentLimitThanIP(t *testing.T) {
 	// Aguardar goroutines de testes anteriores
 	time.Sleep(200 * time.Millisecond)
-	// Limpar estado global antes do teste
-	middleware.ResetGlobalState()
 
 	router := NewRouter()
 	// Configurar: limite IP = 3, limite Token = 10
 	config := middleware.NewRateLimiterConfig(3, time.Second*4, 10, time.Second*4)
 	router.RateLimiter(config)
+	defer router.ResetGlobalState()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -363,12 +347,10 @@ func TestRateLimiter_WithAPIKey_HasDifferentLimitThanIP(t *testing.T) {
 }
 
 func TestRateLimiter_WithAPIKey_UnblocksAfterTokenTimeout(t *testing.T) {
-	// Limpar estado global antes do teste
-	middleware.ResetGlobalState()
-
 	// Criar router com timeout curto para teste com token
 	config := middleware.NewRateLimiterConfig(2, time.Second*2, 3, time.Millisecond*600)
 	rateLimiter := middleware.NewRateLimiter(config)
+	defer rateLimiter.ResetGlobalState()
 	router := NewRouter()
 	router.Handler = rateLimiter.RateLimiterHandler(router.router)
 
@@ -404,13 +386,11 @@ func TestRateLimiter_WithAPIKey_UnblocksAfterTokenTimeout(t *testing.T) {
 }
 
 func TestRateLimiter_WithAPIKey_DifferentIPsSameKey(t *testing.T) {
-	// Limpar estado global antes do teste
-	middleware.ResetGlobalState()
-
 	router := NewRouter()
 	// Configurar: limite IP = 2, limite Token = 5
 	config := middleware.NewRateLimiterConfig(2, time.Second*4, 5, time.Second*4)
 	router.RateLimiter(config)
+	defer router.ResetGlobalState()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

@@ -6,8 +6,9 @@ import (
 )
 
 type ajun struct {
-	router  *http.ServeMux
-	Handler http.Handler
+	router      *http.ServeMux
+	Handler     http.Handler
+	rateLimiter interface{ ResetGlobalState() } // Interface para acessar reset
 }
 
 func newMux() *http.ServeMux {
@@ -28,5 +29,13 @@ func (a *ajun) HandleFunc(pattern string, handler func(http.ResponseWriter, *htt
 
 func (a *ajun) RateLimiter(config middleware.RateLimiterConfig) {
 	rateLimiter := middleware.NewRateLimiter(config)
+	a.rateLimiter = rateLimiter
 	a.Handler = rateLimiter.RateLimiterHandler(a.router)
+}
+
+// ResetGlobalState expõe o método reset do rate limiter para testes
+func (a *ajun) ResetGlobalState() {
+	if a.rateLimiter != nil {
+		a.rateLimiter.ResetGlobalState()
+	}
 }
