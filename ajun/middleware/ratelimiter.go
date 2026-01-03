@@ -58,17 +58,6 @@ func (rl *rateLimiter) RateLimiterHandler(next http.Handler) http.Handler {
 	})
 }
 
-func (rl *rateLimiter) addRemoteAddrDisable(host string, apiToken string) {
-	var timeDelay time.Duration
-	if apiToken != "" {
-		timeDelay = rl.config.TokenDelay
-	} else {
-		timeDelay = rl.config.Delay
-	}
-
-	rl.datasource.DisableClientIP(host, timeDelay)
-}
-
 func (rl *rateLimiter) isRemoteAddrDisabled(host string, apiToken string) bool {
 	timeDisable, exists := rl.datasource.GetTimeDisabledClientIP(host)
 
@@ -89,17 +78,13 @@ func (rl *rateLimiter) isRemoteAddrDisabled(host string, apiToken string) bool {
 	}
 
 	if hostCountRequests > maxRequests {
+		rl.datasource.DisableClientIP(host, timeDelay)
+		fmt.Printf("Disable host: %s - %s\n", host, time.Now().Format(time.TimeOnly))
 
-		go func() {
-			rl.addRemoteAddrDisable(host, apiToken)
-			fmt.Printf("Disable host: %s - %s\n", host, time.Now().Format(time.TimeOnly))
-		}()
-
-		go func() {
-			time.Sleep(timeDelay)
+		time.AfterFunc(timeDelay, func() {
 			rl.datasource.ResetClientIP(host)
 			fmt.Printf("Enable host: %s - %s\n", host, time.Now().Format(time.TimeOnly))
-		}()
+		})
 		return true
 	}
 
