@@ -6,15 +6,12 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 )
 
 type rateLimiter struct {
-	muRemoteAddrs        *sync.RWMutex
-	muRemoteAddrsDisable *sync.RWMutex
-	config               RateLimiterConfig
-	datasource           *local.DataSource
+	config     RateLimiterConfig
+	datasource *local.DataSource
 }
 
 type RateLimiterConfig struct {
@@ -26,10 +23,8 @@ type RateLimiterConfig struct {
 
 func NewRateLimiter(config RateLimiterConfig) *rateLimiter {
 	return &rateLimiter{
-		muRemoteAddrs:        &sync.RWMutex{},
-		muRemoteAddrsDisable: &sync.RWMutex{},
-		config:               config,
-		datasource:           local.InitDataSource(),
+		config:     config,
+		datasource: local.InitDataSource(),
 	}
 }
 
@@ -64,7 +59,6 @@ func (rl *rateLimiter) RateLimiterHandler(next http.Handler) http.Handler {
 }
 
 func (rl *rateLimiter) addRemoteAddrDisable(host string, apiToken string) {
-	// Definir limites para tokens de API, se fornecidos
 	var timeDelay time.Duration
 	if apiToken != "" {
 		timeDelay = rl.config.TokenDelay
@@ -72,24 +66,17 @@ func (rl *rateLimiter) addRemoteAddrDisable(host string, apiToken string) {
 		timeDelay = rl.config.Delay
 	}
 
-	rl.muRemoteAddrsDisable.Lock()
 	rl.datasource.DisableClientIP(host, timeDelay)
-	rl.muRemoteAddrsDisable.Unlock()
 }
 
 func (rl *rateLimiter) isRemoteAddrDisabled(host string, apiToken string) bool {
-	rl.muRemoteAddrsDisable.RLock()
-
 	timeDisable, exists := rl.datasource.GetTimeDisabledClientIP(host)
-	rl.muRemoteAddrsDisable.RUnlock()
 
 	if exists && timeDisable.After(time.Now()) {
 		return true
 	}
 
-	rl.muRemoteAddrs.RLock()
 	hostCountRequests := rl.datasource.GetClientIPCount(host)
-	rl.muRemoteAddrs.RUnlock()
 
 	var maxRequests int
 	var timeDelay time.Duration

@@ -27,12 +27,8 @@ func TestNewRateLimiter(t *testing.T) {
 		t.Errorf("Delay: esperado %v, recebeu %v", timeDelay, rl.config.Delay)
 	}
 
-	if rl.muRemoteAddrs == nil {
-		t.Error("muRemoteAddrs não deve ser nil")
-	}
-
-	if rl.muRemoteAddrsDisable == nil {
-		t.Error("muRemoteAddrsDisable não deve ser nil")
+	if rl.datasource == nil {
+		t.Error("datasource não deve ser nil")
 	}
 }
 
@@ -310,9 +306,7 @@ func TestRateLimiter_AddRemoteAddr(t *testing.T) {
 		rl.datasource.AddClientIP("192.168.1.1")
 	}
 
-	rl.muRemoteAddrs.RLock()
 	count := rl.datasource.GetClientIPCount("192.168.1.1")
-	rl.muRemoteAddrs.RUnlock()
 
 	if count != 3 {
 		t.Errorf("Esperado count 3, recebeu %d", count)
