@@ -101,7 +101,7 @@ func (rl *rateLimiter) isRemoteAddrDisabled(host string, apiToken string) bool {
 		timeDelay = rl.config.Delay
 	}
 
-	if hostCountRequests > maxRequests && !exists {
+	if hostCountRequests > maxRequests {
 
 		go func() {
 			rl.addRemoteAddrDisable(host, apiToken)
