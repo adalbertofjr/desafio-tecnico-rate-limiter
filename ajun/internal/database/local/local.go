@@ -26,13 +26,12 @@ func (ds *DataSource) AddClientIP(clientIP string) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 
-	count := 0
-	if data, exists := ds.ClientIPData[clientIP]; exists {
-		count = data.Count
-	}
+	data, exists := ds.ClientIPData[clientIP]
 
+	count := 0
 	timeDisableUntil := time.Time{}
-	if data, exists := ds.ClientIPData[clientIP]; exists {
+	if exists {
+		count = data.Count
 		timeDisableUntil = data.DisableUntil
 	}
 
