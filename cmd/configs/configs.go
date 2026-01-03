@@ -7,6 +7,8 @@ type Config struct {
 	RateLimiterTimeDelay        string `mapstructure:"RATE_LIMITER_TIME_DELAY"`
 	RateLimiterTokenMaxRequests int    `mapstructure:"RATE_LIMITER_TOKEN_MAX_REQUESTS"`
 	RateLimiterTokenTimeDelay   string `mapstructure:"RATE_LIMITER_TOKEN_TIME_DELAY"`
+	RateLimiterCleanupInterval  string `mapstructure:"RATE_LIMITER_CLEANUP_INTERVAL"`
+	RateLimiterTTL              string `mapstructure:"RATE_LIMITER_TTL"`
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -22,6 +24,8 @@ func LoadConfig(path string) (*Config, error) {
 	viper.BindEnv("RATE_LIMITER_TIME_DELAY")
 	viper.BindEnv("RATE_LIMITER_TOKEN_MAX_REQUESTS")
 	viper.BindEnv("RATE_LIMITER_TOKEN_TIME_DELAY")
+	viper.BindEnv("RATE_LIMITER_CLEANUP_INTERVAL")
+	viper.BindEnv("RATE_LIMITER_TTL")
 
 	if err := viper.ReadInConfig(); err != nil {
 		return nil, err

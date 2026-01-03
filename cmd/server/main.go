@@ -4,6 +4,7 @@ import (
 	"adalbertofjr/desafio-rate-limiter/ajun"
 	"adalbertofjr/desafio-rate-limiter/ajun/middleware"
 	"adalbertofjr/desafio-rate-limiter/cmd/configs"
+	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -23,10 +24,23 @@ func main() {
 		fmt.Printf("Invalid duration format for RATE_LIMITER_TOKEN_TIME_DELAY: %s. Valid time units are \"ns\", \"us\" (or \"µs\"), \"ms\", \"s\", \"m\", \"h\"\n", config.RateLimiterTokenTimeDelay)
 		panic(err)
 	}
+	timeCleanIn, err := time.ParseDuration(config.RateLimiterCleanupInterval)
+	if err != nil {
+		fmt.Printf("Invalid duration format for RATE_LIMITER_CLEANUP_INTERVAL: %s. Valid time units are \"ns\", \"us\" (or \"µs\"), \"ms\", \"s\", \"m\", \"h\"\n", config.RateLimiterCleanupInterval)
+		panic(err)
+	}
+	ttl, err := time.ParseDuration(config.RateLimiterTTL)
+	if err != nil {
+		fmt.Printf("Invalid duration format for RATE_LIMITER_TTL: %s. Valid time units are \"ns\", \"us\" (or \"µs\"), \"ms\", \"s\", \"m\", \"h\"\n", config.RateLimiterTTL)
+		panic(err)
+	}
 
-	rateLimiterConfig := middleware.NewRateLimiterConfig(limitMaxRequests, timeDelay, tokenMaxRequests, tokenTimeDelay)
+	rateLimiterConfig := middleware.NewRateLimiterConfig(limitMaxRequests, timeDelay, tokenMaxRequests, tokenTimeDelay, timeCleanIn, ttl)
 
-	ajunRouter := ajun.NewRouter()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ajunRouter := ajun.NewRouter(ctx)
 	ajunRouter.RateLimiter(rateLimiterConfig)
 
 	ajunRouter.HandleFunc("/health", healthHandler)

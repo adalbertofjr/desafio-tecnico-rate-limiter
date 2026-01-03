@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"adalbertofjr/desafio-rate-limiter/ajun/internal/database/local"
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -15,25 +16,29 @@ type rateLimiter struct {
 }
 
 type RateLimiterConfig struct {
-	Limit      int
-	Delay      time.Duration
-	TokenLimit int
-	TokenDelay time.Duration
+	Limit       int
+	Delay       time.Duration
+	TokenLimit  int
+	TokenDelay  time.Duration
+	TimeCleanIn time.Duration
+	TTL         time.Duration
 }
 
-func NewRateLimiter(config RateLimiterConfig) *rateLimiter {
+func NewRateLimiter(ctx context.Context, config RateLimiterConfig) *rateLimiter {
 	return &rateLimiter{
 		config:     config,
-		datasource: local.InitDataSource(),
+		datasource: local.InitDataSource(ctx, config.TimeCleanIn, config.TTL),
 	}
 }
 
-func NewRateLimiterConfig(limit int, delay time.Duration, tokenLimit int, tokenDelay time.Duration) RateLimiterConfig {
+func NewRateLimiterConfig(limit int, delay time.Duration, tokenLimit int, tokenDelay time.Duration, timeCleanIn time.Duration, ttl time.Duration) RateLimiterConfig {
 	return RateLimiterConfig{
-		Limit:      limit,
-		Delay:      delay,
-		TokenLimit: tokenLimit,
-		TokenDelay: tokenDelay,
+		Limit:       limit,
+		Delay:       delay,
+		TokenLimit:  tokenLimit,
+		TokenDelay:  tokenDelay,
+		TimeCleanIn: timeCleanIn,
+		TTL:         ttl,
 	}
 }
 

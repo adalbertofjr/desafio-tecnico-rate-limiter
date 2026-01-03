@@ -1,12 +1,16 @@
 package local
 
 import (
+	"context"
+	"log"
 	"sync"
 	"time"
 )
 
 type DataSource struct {
 	mu           sync.RWMutex
+	timeCleanIn  time.Duration
+	ttl          time.Duration
 	ClientIPData map[string]*ClientIPData
 }
 
@@ -16,10 +20,16 @@ type ClientIPData struct {
 	DisableUntil time.Time
 }
 
-func InitDataSource() *DataSource {
-	return &DataSource{
+func InitDataSource(ctx context.Context, timeCleanIn time.Duration, ttl time.Duration) *DataSource {
+	dataSource := &DataSource{
+		timeCleanIn:  timeCleanIn,
+		ttl:          ttl,
 		ClientIPData: make(map[string]*ClientIPData),
 	}
+
+	go dataSource.StartCleanupWorker(ctx, timeCleanIn, ttl)
+
+	return dataSource
 }
 
 func (ds *DataSource) AddClientIP(clientIP string) {
@@ -41,7 +51,6 @@ func (ds *DataSource) AddClientIP(clientIP string) {
 		DisableUntil: timeDisableUntil,
 	}
 
-	// todo: verificar se existe e inicializar se necessário
 	ds.ClientIPData[clientIP] = clientData
 }
 
@@ -104,4 +113,42 @@ func (ds *DataSource) ResetDataClientIPs() {
 	defer ds.mu.Unlock()
 
 	ds.ClientIPData = make(map[string]*ClientIPData)
+}
+
+func (ds *DataSource) StartCleanupWorker(ctx context.Context, interval time.Duration, ttl time.Duration) {
+	// interval := 30 * time.Second
+	// ttl := 45 * time.Second
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			ds.cleanupOldData(ttl)
+		case <-ctx.Done():
+			log.Println("Cleanup worker stopped")
+			return
+		}
+	}
+}
+
+func (ds *DataSource) cleanupOldData(ttl time.Duration) {
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
+
+	now := time.Now()
+	count := 0
+
+	for ip, data := range ds.ClientIPData {
+		if data.DisableUntil.Before(now) && now.Sub(data.Time) > ttl {
+			delete(ds.ClientIPData, ip)
+			log.Printf("Cleaned up data for IP: %s\n", ip)
+			count++
+		}
+	}
+
+	if count > 0 {
+		log.Printf("Cleanup complete. Removed %d old entries.\n", count)
+	}
 }

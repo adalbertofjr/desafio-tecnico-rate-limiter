@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -12,8 +13,9 @@ func TestNewRateLimiter(t *testing.T) {
 	maxRequests := 10
 	timeDelay := time.Second * 5
 
-	config := NewRateLimiterConfig(maxRequests, timeDelay, 0, 0)
-	rl := NewRateLimiter(config)
+	config := NewRateLimiterConfig(maxRequests, timeDelay, 0, 0, 30*time.Second, 45*time.Second)
+	ctx := context.Background()
+	rl := NewRateLimiter(ctx, config)
 
 	if rl == nil {
 		t.Fatal("NewRateLimiter retornou nil")
@@ -33,8 +35,9 @@ func TestNewRateLimiter(t *testing.T) {
 }
 
 func TestRateLimiterHandler_AllowsRequestsBelowLimit(t *testing.T) {
-	config := NewRateLimiterConfig(5, time.Second*2, 0, 0)
-	rl := NewRateLimiter(config)
+	config := NewRateLimiterConfig(5, time.Second*2, 0, 0, 30*time.Second, 45*time.Second)
+	ctx := context.Background()
+	rl := NewRateLimiter(ctx, config)
 	defer rl.ResetGlobalState()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -63,8 +66,9 @@ func TestRateLimiterHandler_AllowsRequestsBelowLimit(t *testing.T) {
 }
 
 func TestRateLimiterHandler_BlocksRequestsAboveLimit(t *testing.T) {
-	config := NewRateLimiterConfig(3, time.Second*2, 0, 0)
-	rl := NewRateLimiter(config)
+	config := NewRateLimiterConfig(3, time.Second*2, 0, 0, 30*time.Second, 45*time.Second)
+	ctx := context.Background()
+	rl := NewRateLimiter(ctx, config)
 	defer rl.ResetGlobalState()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -99,8 +103,9 @@ func TestRateLimiterHandler_BlocksRequestsAboveLimit(t *testing.T) {
 }
 
 func TestRateLimiterHandler_ResetsAfterTimeout(t *testing.T) {
-	config := NewRateLimiterConfig(2, time.Millisecond*500, 0, 0)
-	rl := NewRateLimiter(config)
+	config := NewRateLimiterConfig(2, time.Millisecond*500, 0, 0, 30*time.Second, 45*time.Second)
+	ctx := context.Background()
+	rl := NewRateLimiter(ctx, config)
 	defer rl.ResetGlobalState()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -142,8 +147,9 @@ func TestRateLimiterHandler_ResetsAfterTimeout(t *testing.T) {
 }
 
 func TestRateLimiterHandler_DifferentIPsIndependent(t *testing.T) {
-	config := NewRateLimiterConfig(2, time.Second*2, 0, 0)
-	rl := NewRateLimiter(config)
+	config := NewRateLimiterConfig(2, time.Second*2, 0, 0, 30*time.Second, 45*time.Second)
+	ctx := context.Background()
+	rl := NewRateLimiter(ctx, config)
 	defer rl.ResetGlobalState()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -182,8 +188,9 @@ func TestRateLimiterHandler_DifferentIPsIndependent(t *testing.T) {
 }
 
 func TestRateLimiterHandler_HandlesIPv6(t *testing.T) {
-	config := NewRateLimiterConfig(5, time.Second*2, 0, 0)
-	rl := NewRateLimiter(config)
+	config := NewRateLimiterConfig(5, time.Second*2, 0, 0, 30*time.Second, 45*time.Second)
+	ctx := context.Background()
+	rl := NewRateLimiter(ctx, config)
 	defer rl.ResetGlobalState()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -204,8 +211,9 @@ func TestRateLimiterHandler_HandlesIPv6(t *testing.T) {
 }
 
 func TestRateLimiterHandler_HandlesInvalidIP(t *testing.T) {
-	config := NewRateLimiterConfig(5, time.Second*2, 0, 0)
-	rl := NewRateLimiter(config)
+	config := NewRateLimiterConfig(5, time.Second*2, 0, 0, 30*time.Second, 45*time.Second)
+	ctx := context.Background()
+	rl := NewRateLimiter(ctx, config)
 	defer rl.ResetGlobalState()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -226,8 +234,9 @@ func TestRateLimiterHandler_HandlesInvalidIP(t *testing.T) {
 }
 
 func TestRateLimiterHandler_ConcurrentRequests(t *testing.T) {
-	config := NewRateLimiterConfig(10, time.Second*2, 0, 0)
-	rl := NewRateLimiter(config)
+	config := NewRateLimiterConfig(10, time.Second*2, 0, 0, 30*time.Second, 45*time.Second)
+	ctx := context.Background()
+	rl := NewRateLimiter(ctx, config)
 	defer rl.ResetGlobalState()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -278,8 +287,9 @@ func TestRateLimiterHandler_ConcurrentRequests(t *testing.T) {
 }
 
 func TestResetGlobalState(t *testing.T) {
-	config := NewRateLimiterConfig(5, time.Second, 0, 0)
-	rl := NewRateLimiter(config)
+	config := NewRateLimiterConfig(5, time.Second, 0, 0, 30*time.Second, 45*time.Second)
+	ctx := context.Background()
+	rl := NewRateLimiter(ctx, config)
 
 	// Adicionar dados
 	rl.datasource.AddClientIP("test-ip")
@@ -297,8 +307,9 @@ func TestResetGlobalState(t *testing.T) {
 }
 
 func TestRateLimiter_AddRemoteAddr(t *testing.T) {
-	config := NewRateLimiterConfig(5, time.Second, 0, 0)
-	rl := NewRateLimiter(config)
+	config := NewRateLimiterConfig(5, time.Second, 0, 0, 30*time.Second, 45*time.Second)
+	ctx := context.Background()
+	rl := NewRateLimiter(ctx, config)
 	defer rl.ResetGlobalState()
 
 	// Adicionar mesmo IP 3 vezes
@@ -314,8 +325,9 @@ func TestRateLimiter_AddRemoteAddr(t *testing.T) {
 }
 
 func TestRateLimiter_IsRemoteAddrDisabled(t *testing.T) {
-	config := NewRateLimiterConfig(2, time.Millisecond*100, 0, 0)
-	rl := NewRateLimiter(config)
+	config := NewRateLimiterConfig(2, time.Millisecond*100, 0, 0, 30*time.Second, 45*time.Second)
+	ctx := context.Background()
+	rl := NewRateLimiter(ctx, config)
 	defer rl.ResetGlobalState()
 
 	// Não está desabilitado inicialmente
@@ -344,12 +356,13 @@ func TestRateLimiter_IsRemoteAddrDisabled(t *testing.T) {
 
 func TestRateLimiter_MultipleInstances(t *testing.T) {
 	// Criar duas instâncias com configurações diferentes
-	config1 := NewRateLimiterConfig(5, time.Second, 0, 0)
-	rl1 := NewRateLimiter(config1)
+	config1 := NewRateLimiterConfig(5, time.Second, 0, 0, 30*time.Second, 45*time.Second)
+	ctx := context.Background()
+	rl1 := NewRateLimiter(ctx, config1)
 	defer rl1.ResetGlobalState()
 
-	config2 := NewRateLimiterConfig(10, time.Second*2, 0, 0)
-	rl2 := NewRateLimiter(config2)
+	config2 := NewRateLimiterConfig(10, time.Second*2, 0, 0, 30*time.Second, 45*time.Second)
+	rl2 := NewRateLimiter(ctx, config2)
 
 	if rl1.config.Limit == rl2.config.Limit {
 		t.Error("Instâncias deveriam ter configurações diferentes")
@@ -367,8 +380,9 @@ func TestRateLimiter_MultipleInstances(t *testing.T) {
 
 func TestRateLimiterHandler_WithAPIKey_AllowsRequestsBelowTokenLimit(t *testing.T) {
 	// Configurar: limite IP = 2, limite Token = 10
-	config := NewRateLimiterConfig(2, time.Second*2, 10, time.Second*2)
-	rl := NewRateLimiter(config)
+	config := NewRateLimiterConfig(2, time.Second*2, 10, time.Second*2, 30*time.Second, 45*time.Second)
+	ctx := context.Background()
+	rl := NewRateLimiter(ctx, config)
 	defer rl.ResetGlobalState()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -399,8 +413,9 @@ func TestRateLimiterHandler_WithAPIKey_AllowsRequestsBelowTokenLimit(t *testing.
 
 func TestRateLimiterHandler_WithAPIKey_BlocksRequestsAboveTokenLimit(t *testing.T) {
 	// Configurar: limite IP = 2, limite Token = 5
-	config := NewRateLimiterConfig(2, time.Second*2, 5, time.Second*2)
-	rl := NewRateLimiter(config)
+	config := NewRateLimiterConfig(2, time.Second*2, 5, time.Second*2, 30*time.Second, 45*time.Second)
+	ctx := context.Background()
+	rl := NewRateLimiter(ctx, config)
 	defer rl.ResetGlobalState()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -439,8 +454,9 @@ func TestRateLimiterHandler_WithAPIKey_HasDifferentLimitThanIP(t *testing.T) {
 	// Aguardar goroutines de testes anteriores
 	time.Sleep(100 * time.Millisecond)
 	// Configurar: limite IP = 3, limite Token = 10
-	config := NewRateLimiterConfig(3, time.Second*2, 10, time.Second*2)
-	rl := NewRateLimiter(config)
+	config := NewRateLimiterConfig(3, time.Second*2, 10, time.Second*2, 30*time.Second, 45*time.Second)
+	ctx := context.Background()
+	rl := NewRateLimiter(ctx, config)
 	defer rl.ResetGlobalState()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -472,8 +488,9 @@ func TestRateLimiterHandler_WithAPIKey_HasDifferentLimitThanIP(t *testing.T) {
 
 func TestRateLimiterHandler_WithAPIKey_UnblocksAfterTokenTimeout(t *testing.T) {
 	// Criar rate limiter com timeout curto para token
-	config := NewRateLimiterConfig(2, time.Second*2, 3, time.Millisecond*500)
-	rl := NewRateLimiter(config)
+	config := NewRateLimiterConfig(2, time.Second*2, 3, time.Millisecond*500, 30*time.Second, 45*time.Second)
+	ctx := context.Background()
+	rl := NewRateLimiter(ctx, config)
 	defer rl.ResetGlobalState()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -519,8 +536,9 @@ func TestRateLimiterHandler_WithAPIKey_UnblocksAfterTokenTimeout(t *testing.T) {
 
 func TestRateLimiterHandler_WithAPIKey_DifferentIPsSameKey(t *testing.T) {
 	// Configurar: limite IP = 2, limite Token = 5
-	config := NewRateLimiterConfig(2, time.Second*2, 5, time.Second*2)
-	rl := NewRateLimiter(config)
+	config := NewRateLimiterConfig(2, time.Second*2, 5, time.Second*2, 30*time.Second, 45*time.Second)
+	ctx := context.Background()
+	rl := NewRateLimiter(ctx, config)
 	defer rl.ResetGlobalState()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

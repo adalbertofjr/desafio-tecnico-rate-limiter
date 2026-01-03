@@ -2,10 +2,12 @@ package ajun
 
 import (
 	"adalbertofjr/desafio-rate-limiter/ajun/middleware"
+	"context"
 	"net/http"
 )
 
 type ajun struct {
+	ctx         context.Context
 	router      *http.ServeMux
 	Handler     http.Handler
 	rateLimiter interface{ ResetGlobalState() } // Interface para acessar reset
@@ -15,9 +17,10 @@ func newMux() *http.ServeMux {
 	return http.NewServeMux()
 }
 
-func NewRouter() *ajun {
+func NewRouter(ctx context.Context) *ajun {
 	mux := newMux()
 	return &ajun{
+		ctx:     ctx,
 		router:  mux,
 		Handler: mux,
 	}
@@ -28,7 +31,7 @@ func (a *ajun) HandleFunc(pattern string, handler func(http.ResponseWriter, *htt
 }
 
 func (a *ajun) RateLimiter(config middleware.RateLimiterConfig) {
-	rateLimiter := middleware.NewRateLimiter(config)
+	rateLimiter := middleware.NewRateLimiter(a.ctx, config)
 	a.rateLimiter = rateLimiter
 	a.Handler = rateLimiter.RateLimiterHandler(a.router)
 }
