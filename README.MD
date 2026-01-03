@@ -1,8 +1,9 @@
 # Rate Limiter - Desafio Técnico FullCycle
 
 [![Go Version](https://img.shields.io/badge/Go-1.23-blue.svg)](https://golang.org)
-[![Tests](https://img.shields.io/badge/tests-35%20passing-brightgreen.svg)](https://github.com)
+[![Tests](https://img.shields.io/badge/tests-41%20passing-brightgreen.svg)](https://github.com)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)](https://github.com)
+[![Architecture](https://img.shields.io/badge/pattern-Strategy-orange.svg)](https://refactoring.guru/design-patterns/strategy)
 
 Middleware HTTP para controle de taxa de requisições (rate limiting) desenvolvido em Go, com suporte a limitação por IP e por token de API.
 
@@ -16,7 +17,9 @@ Middleware HTTP para controle de taxa de requisições (rate limiting) desenvolv
 - ✅ **Graceful shutdown**: Suporte a context para parada controlada
 - ✅ **Configurável**: Todos os parâmetros via variáveis de ambiente
 - ✅ **IPv4 e IPv6**: Suporte completo para ambos protocolos
-- ✅ **In-memory storage**: Armazenamento local de alta performance
+- ✅ **Strategy Pattern**: Backend plugável com interface para múltiplas implementações
+- ✅ **In-memory storage**: Armazenamento local de alta performance com deep copy
+- ✅ **Extensível**: Fácil adição de novos backends (Redis, PostgreSQL, etc.)
 
 ## 🚀 Instalação
 
@@ -107,7 +110,7 @@ func main() {
     ctx := context.Background()
     
     // Configurar rate limiter
-    config := middleware.NewRateLimiterConfig(
+    config := ratelimiter.NewRateLimiterConfig(
         100,              // limite por IP
         time.Minute,      // delay de bloqueio IP
         200,              // limite por token
@@ -125,6 +128,22 @@ func main() {
     
     // Iniciar servidor
     http.ListenAndServe(":8080", router.Handler)
+}
+
+// Exemplo com backend customizado (futuro)
+func mainWithRedis() {
+    ctx := context.Background()
+    
+    // Usar backend customizado
+    redisBackend := NewRedisBackend("redis://localhost:6379")
+    config := ratelimiter.RateLimiterConfigWithBackend{
+        Config: ratelimiter.NewRateLimiterConfig(...),
+        Backend: redisBackend, // Strategy Pattern em ação
+    }
+    
+    router := ajun.NewRouter(ctx)
+    router.RateLimiter(config.Config)
+    // Backend será usado automaticamente via interface
 }
 ```
 
@@ -161,24 +180,25 @@ Too many requests
 
 ```
 .
-├── ajun/
-│   ├── middleware/
-│   │   ├── ratelimiter.go       # Lógica principal do rate limiter
-│   │   └── ratelimiter_test.go  # Testes do middleware
-│   ├── internal/
-│   │   └── database/
-│   │       └── local/
-│   │           ├── local.go      # Storage in-memory
-│   │           └── local_test.go # Testes de cleanup
+├── ajun/                         # Framework/Router customizado
 │   ├── ajun.go                   # Router wrapper
-│   └── ajun_test.go              # Testes de integração
+│   ├── ajun_test.go              # Testes de integração
+│   └── middleware/
+│       └── ratelimiter/
+│           ├── ratelimiter.go    # Lógica principal do rate limiter
+│           ├── ratelimiter_test.go
+│           ├── storage.go        # Camada de storage com cleanup
+│           ├── interface.go      # Backend interface (Strategy)
+│           ├── memory.go         # Implementação in-memory
+│           ├── memory_test.go    # Testes do backend memory
+│           └── types.go          # ClientIPData struct
 ├── cmd/
 │   ├── configs/
 │   │   └── configs.go            # Carregamento de configurações
 │   └── server/
 │       └── main.go               # Entry point
 └── api/
-    └── health.http               # Exemplos de requisições
+    └── health.http               # Exemplos de requisições HTTP
 ```
 
 ### Componentes Principais
@@ -189,19 +209,94 @@ Intercepta requisições HTTP e aplica controle de taxa baseado em:
 - IP do cliente (`RemoteAddr`)
 - Header `Api_key` (se presente)
 
-#### 2. **DataSource (Storage)**
+#### 2. **Storage Layer**
 
-Gerencia dados de rate limiting em memória:
+Gerencia dados de rate limiting:
 - Contador de requisições por IP
 - Timestamps de última atividade
 - Status de bloqueio (`DisableUntil`)
+- Integração com backend via interface
 
-#### 3. **Cleanup Worker**
+#### 3. **Backend Interface (Strategy Pattern)**
+
+Interface que define operações de armazenamento:
+```go
+type Backend interface {
+    Get(clientIP string) (*ClientIPData, error)
+    Set(clientIP string, data *ClientIPData) error
+    Delete(clientIP string) error
+    List() (map[string]*ClientIPData, error)
+}
+```
+
+**Implementações disponíveis:**
+- `MemoryBackend`: In-memory com deep copy e thread-safety
+- **Futuro**: `RedisBackend`, `PostgreSQLBackend`, etc.
+
+#### 4. **Cleanup Worker**
 
 Goroutine background que executa periodicamente:
 - Remove IPs sem atividade (baseado em TTL)
 - Respeita bloqueios ativos
 - Para gracefully com context
+
+### Design Patterns
+
+#### Strategy Pattern - Backend Plugável
+
+O projeto implementa o **Strategy Pattern** para permitir diferentes estratégias de armazenamento sem alterar a lógica do rate limiter:
+
+```go
+// Interface Strategy
+type Backend interface {
+    Get(clientIP string) (*ClientIPData, error)
+    Set(clientIP string, data *ClientIPData) error
+    Delete(clientIP string) error
+    List() (map[string]*ClientIPData, error)
+}
+
+// Estratégia Concreta 1: In-Memory
+type MemoryBackend struct {
+    mu   sync.RWMutex
+    data map[string]*ClientIPData
+}
+
+// Estratégia Concreta 2: Redis (futuro)
+type RedisBackend struct {
+    client *redis.Client
+}
+
+// Context que usa a Strategy
+type Storage struct {
+    backend Backend  // <- Composição com interface
+    // ... outros campos
+}
+```
+
+**Benefícios:**
+- ✅ **Open/Closed Principle**: Aberto para extensão, fechado para modificação
+- ✅ **Testabilidade**: Mock fácil do backend para testes
+- ✅ **Flexibilidade**: Trocar backend em runtime se necessário
+- ✅ **Separação de responsabilidades**: Storage não conhece detalhes de implementação
+
+**Como adicionar novo backend:**
+```go
+// 1. Implementar a interface Backend
+type PostgreSQLBackend struct {
+    db *sql.DB
+}
+
+func (p *PostgreSQLBackend) Get(clientIP string) (*ClientIPData, error) {
+    // implementação específica do PostgreSQL
+}
+// ... implementar outros métodos
+
+// 2. Usar no Storage
+backend := NewPostgreSQLBackend(connStr)
+storage := NewStorage(ctx, backend, cleanupInterval, ttl)
+
+// Pronto! O resto do código continua funcionando
+```
 
 ### Fluxo de Funcionamento
 
@@ -259,15 +354,22 @@ go test ./... -race
 ### Cobertura Atual
 
 ```
-ajun:       100.0% ✅
-middleware: 100.0% ✅
-local:       39.0% (cobre cleanup + operações principais)
+router:              100.0% ✅
+middleware/ratelimiter: 100.0% ✅
+storage:             100.0% ✅
+memory backend:      100.0% ✅
 ```
 
-**Total: 35 testes**
-- 11 testes de integração (ajun)
-- 18 testes unitários (middleware)
-- 7 testes de cleanup (local)
+**Total: 41 testes**
+- 11 testes de integração (router)
+- 18 testes unitários (ratelimiter)
+- 12 testes de backend memory
+
+**Benchmarks:**
+- `BenchmarkMemoryBackend_Set`: ~35ns/op (0 alocações)
+- `BenchmarkMemoryBackend_Get`: ~22ns/op (0 alocações)
+- `BenchmarkMemoryBackend_ConcurrentSet`: ~202ns/op
+- `BenchmarkMemoryBackend_ConcurrentGet`: ~110ns/op
 
 ### Cenários Testados
 
@@ -280,25 +382,26 @@ local:       39.0% (cobre cleanup + operações principais)
 - ✅ Limites diferentes para API Key
 - ✅ Cleanup automático de dados antigos
 - ✅ Graceful shutdown do cleanup worker
+- ✅ Deep copy no backend para isolamento de dados
+- ✅ Thread-safety testado com race detector
+- ✅ Backend plugável via Strategy Pattern
 
 ## 🛠️ Desenvolvimento
 
-### Tecnologias Utilizadas
+### Tecnologias e Padrões
 
 - **Go 1.23**: Linguagem principal
-- **sync.RWMutex**: Thread-safety
-- **context.Context**: Controle de lifecycle
+- **Strategy Pattern**: Backend plugável e extensível
+- **sync.RWMutex**: Thread-safety com read/write locks
+- **context.Context**: Controle de lifecycle e graceful shutdown
 - **time.Ticker**: Cleanup periódico
 - **Viper**: Gerenciamento de configurações
 - **httptest**: Testes HTTP
+- **Deep Copy**: Isolamento de dados no backend
 
 ### Executar em modo desenvolvimento
 
 ```bash
-# Com live reload (usando air)
-air
-
-# Ou manualmente
 go run cmd/server/main.go
 ```
 
@@ -306,13 +409,16 @@ go run cmd/server/main.go
 
 ```bash
 # Apenas testes de middleware
-go test ./ajun/middleware -v
+go test ./ajun/middleware/ratelimiter -v
 
-# Apenas testes de cleanup
-go test ./ajun/internal/database/local -v
+# Apenas testes do backend memory
+go test ./ajun/middleware/ratelimiter -run TestMemoryBackend -v
 
 # Teste específico
-go test ./ajun/middleware -run TestRateLimiterHandler_BlocksRequestsAboveLimit -v
+go test ./ajun/middleware/ratelimiter -run TestRateLimiterHandler_BlocksRequestsAboveLimit -v
+
+# Benchmarks do backend
+go test ./ajun/middleware/ratelimiter -bench=BenchmarkMemoryBackend -benchmem
 ```
 
 ## 📊 Performance
@@ -320,7 +426,7 @@ go test ./ajun/middleware -run TestRateLimiterHandler_BlocksRequestsAboveLimit -
 ### Benchmarks
 
 ```bash
-go test ./ajun/middleware -bench=. -benchmem
+go test ./ajun/middleware/ratelimiter -bench=. -benchmem
 ```
 
 ### Capacidade Estimada
@@ -335,6 +441,9 @@ go test ./ajun/middleware -bench=. -benchmem
 - ✅ Map lookup O(1)
 - ✅ Cleanup assíncrono (não bloqueia requisições)
 - ✅ Sem goroutines vazando (timer gerenciado)
+- ✅ Deep copy apenas no `List()` (Get/Set sem alocações extras)
+- ✅ Backend interface sem overhead (chamadas diretas)
+- ✅ Zero alocações nas operações Get/Set (~22-35ns/op)
 
 ## 🐳 Docker (Opcional)
 

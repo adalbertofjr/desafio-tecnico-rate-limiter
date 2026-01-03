@@ -1,7 +1,7 @@
 package ajun
 
 import (
-	"adalbertofjr/desafio-rate-limiter/ajun/middleware"
+	"adalbertofjr/desafio-rate-limiter/ajun/middleware/ratelimiter"
 	"context"
 	"net/http"
 )
@@ -30,8 +30,8 @@ func (a *ajun) HandleFunc(pattern string, handler func(http.ResponseWriter, *htt
 	a.router.HandleFunc(pattern, handler)
 }
 
-func (a *ajun) RateLimiter(config middleware.RateLimiterConfig) {
-	rateLimiter := middleware.NewRateLimiter(a.ctx, config)
+func (a *ajun) RateLimiter(config ratelimiter.RateLimiterConfig) {
+	rateLimiter := ratelimiter.NewRateLimiter(a.ctx, config)
 	a.rateLimiter = rateLimiter
 	a.Handler = rateLimiter.RateLimiterHandler(a.router)
 }

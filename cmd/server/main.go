@@ -2,8 +2,10 @@ package main
 
 import (
 	"adalbertofjr/desafio-rate-limiter/ajun"
-	"adalbertofjr/desafio-rate-limiter/ajun/middleware"
 	"adalbertofjr/desafio-rate-limiter/cmd/configs"
+
+	"adalbertofjr/desafio-rate-limiter/ajun/middleware/ratelimiter"
+
 	"context"
 	"fmt"
 	"net/http"
@@ -35,7 +37,7 @@ func main() {
 		panic(err)
 	}
 
-	rateLimiterConfig := middleware.NewRateLimiterConfig(limitMaxRequests, timeDelay, tokenMaxRequests, tokenTimeDelay, timeCleanIn, ttl)
+	rateLimiterConfig := ratelimiter.NewRateLimiterConfig(limitMaxRequests, timeDelay, tokenMaxRequests, tokenTimeDelay, timeCleanIn, ttl)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

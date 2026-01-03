@@ -1,7 +1,6 @@
-package middleware
+package ratelimiter
 
 import (
-	"adalbertofjr/desafio-rate-limiter/ajun/internal/database/local"
 	"context"
 	"fmt"
 	"net"
@@ -11,8 +10,8 @@ import (
 )
 
 type rateLimiter struct {
-	config     RateLimiterConfig
-	datasource local.Storage
+	config  RateLimiterConfig
+	storage Storage
 }
 
 type RateLimiterConfig struct {
@@ -26,8 +25,12 @@ type RateLimiterConfig struct {
 
 func NewRateLimiter(ctx context.Context, config RateLimiterConfig) *rateLimiter {
 	return &rateLimiter{
-		config:     config,
-		datasource: local.NewLocalStorage(ctx, config.TimeCleanIn, config.TTL),
+		config: config,
+		storage: *NewStorage(ctx,
+			NewMemoryBackend(),
+			config.TimeCleanIn,
+			config.TTL),
+		// datasource: local.NewLocalStorage(ctx, config.TimeCleanIn, config.TTL),
 	}
 }
 
@@ -50,7 +53,7 @@ func (rl *rateLimiter) RateLimiterHandler(next http.Handler) http.Handler {
 			clientIP = strings.Split(ip, ":")[0]
 		}
 
-		rl.datasource.AddClientIP(clientIP)
+		rl.storage.AddClientIP(clientIP)
 		apiToken := r.Header.Get("Api_key")
 
 		if rl.isRemoteAddrDisabled(clientIP, apiToken) {
@@ -64,13 +67,13 @@ func (rl *rateLimiter) RateLimiterHandler(next http.Handler) http.Handler {
 }
 
 func (rl *rateLimiter) isRemoteAddrDisabled(host string, apiToken string) bool {
-	timeDisable, exists := rl.datasource.GetTimeDisabledClientIP(host)
+	timeDisable, exists := rl.storage.GetTimeDisabledClientIP(host)
 
 	if exists && timeDisable.After(time.Now()) {
 		return true
 	}
 
-	hostCountRequests := rl.datasource.GetClientIPCount(host)
+	hostCountRequests := rl.storage.GetClientIPCount(host)
 
 	var maxRequests int
 	var timeDelay time.Duration
@@ -83,11 +86,11 @@ func (rl *rateLimiter) isRemoteAddrDisabled(host string, apiToken string) bool {
 	}
 
 	if hostCountRequests > maxRequests {
-		rl.datasource.DisableClientIP(host, timeDelay)
+		rl.storage.DisableClientIP(host, timeDelay)
 		fmt.Printf("Disable host: %s - %s\n", host, time.Now().Format(time.TimeOnly))
 
 		time.AfterFunc(timeDelay, func() {
-			rl.datasource.ResetClientIP(host)
+			rl.storage.ResetClientIP(host)
 			fmt.Printf("Enable host: %s - %s\n", host, time.Now().Format(time.TimeOnly))
 		})
 		return true
@@ -97,5 +100,5 @@ func (rl *rateLimiter) isRemoteAddrDisabled(host string, apiToken string) bool {
 }
 
 func (rl *rateLimiter) ResetGlobalState() {
-	rl.datasource.ResetDataClientIPs()
+	rl.storage.ResetDataClientIPs()
 }

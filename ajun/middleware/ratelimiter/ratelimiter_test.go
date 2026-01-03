@@ -1,4 +1,4 @@
-package middleware
+package ratelimiter
 
 import (
 	"context"
@@ -27,10 +27,6 @@ func TestNewRateLimiter(t *testing.T) {
 
 	if rl.config.Delay != timeDelay {
 		t.Errorf("Delay: esperado %v, recebeu %v", timeDelay, rl.config.Delay)
-	}
-
-	if rl.datasource == nil {
-		t.Error("datasource não deve ser nil")
 	}
 }
 
@@ -292,15 +288,15 @@ func TestResetGlobalState(t *testing.T) {
 	rl := NewRateLimiter(ctx, config)
 
 	// Adicionar dados
-	rl.datasource.AddClientIP("test-ip")
-	rl.datasource.AddClientIP("test-ip")
-	rl.datasource.AddClientIP("test-ip")
+	rl.storage.AddClientIP("test-ip")
+	rl.storage.AddClientIP("test-ip")
+	rl.storage.AddClientIP("test-ip")
 
 	// Resetar
 	rl.ResetGlobalState()
 
 	// Verificar que foi limpo
-	count := rl.datasource.GetClientIPCount("test-ip")
+	count := rl.storage.GetClientIPCount("test-ip")
 	if count != 0 {
 		t.Errorf("ClientIP não foi limpo: count %d", count)
 	}
@@ -314,10 +310,10 @@ func TestRateLimiter_AddRemoteAddr(t *testing.T) {
 
 	// Adicionar mesmo IP 3 vezes
 	for i := 0; i < 3; i++ {
-		rl.datasource.AddClientIP("192.168.1.1")
+		rl.storage.AddClientIP("192.168.1.1")
 	}
 
-	count := rl.datasource.GetClientIPCount("192.168.1.1")
+	count := rl.storage.GetClientIPCount("192.168.1.1")
 
 	if count != 3 {
 		t.Errorf("Esperado count 3, recebeu %d", count)
@@ -337,7 +333,7 @@ func TestRateLimiter_IsRemoteAddrDisabled(t *testing.T) {
 
 	// Adicionar requisições acima do limite
 	for i := 0; i < 3; i++ {
-		rl.datasource.AddClientIP("192.168.1.1")
+		rl.storage.AddClientIP("192.168.1.1")
 	}
 
 	// Agora deve estar desabilitado
@@ -372,9 +368,9 @@ func TestRateLimiter_MultipleInstances(t *testing.T) {
 		t.Error("Instâncias deveriam ter Delay diferentes")
 	}
 
-	// Cada instância agora tem seu próprio datasource
-	if rl1.datasource == rl2.datasource {
-		t.Error("Instâncias deveriam ter datasources diferentes")
+	// Cada instância agora tem seu próprio storage
+	if &rl1.storage == &rl2.storage {
+		t.Error("Instâncias deveriam ter storages diferentes")
 	}
 }
 
