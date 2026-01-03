@@ -8,26 +8,26 @@ import (
 )
 
 type DataSource struct {
-	mu           sync.RWMutex
-	timeCleanIn  time.Duration
-	ttl          time.Duration
-	ClientIPData map[string]*ClientIPData
+	mu          sync.RWMutex
+	timeCleanIn time.Duration
+	ttl         time.Duration
+	clients     map[string]*ClientIPData
 }
 
 type ClientIPData struct {
-	Count        int
-	Time         time.Time
-	DisableUntil time.Time
+	count        int
+	time         time.Time
+	disableUntil time.Time
 }
 
 func InitDataSource(ctx context.Context, timeCleanIn time.Duration, ttl time.Duration) *DataSource {
 	dataSource := &DataSource{
-		timeCleanIn:  timeCleanIn,
-		ttl:          ttl,
-		ClientIPData: make(map[string]*ClientIPData),
+		timeCleanIn: timeCleanIn,
+		ttl:         ttl,
+		clients:     make(map[string]*ClientIPData),
 	}
 
-	go dataSource.StartCleanupWorker(ctx, timeCleanIn, ttl)
+	go dataSource.StartCleanupWorker(ctx)
 
 	return dataSource
 }
@@ -36,67 +36,56 @@ func (ds *DataSource) AddClientIP(clientIP string) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 
-	data, exists := ds.ClientIPData[clientIP]
-
-	count := 0
-	timeDisableUntil := time.Time{}
-	if exists {
-		count = data.Count
-		timeDisableUntil = data.DisableUntil
+	data, exists := ds.clients[clientIP]
+	if !exists {
+		data = &ClientIPData{}
+		ds.clients[clientIP] = data
 	}
-
-	clientData := &ClientIPData{
-		Count:        count + 1,
-		Time:         time.Now(),
-		DisableUntil: timeDisableUntil,
-	}
-
-	ds.ClientIPData[clientIP] = clientData
+	data.count++
+	data.time = time.Now()
 }
 
 func (ds *DataSource) DisableClientIP(clientIP string, duration time.Duration) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 
-	if data, exists := ds.ClientIPData[clientIP]; exists {
-		data.DisableUntil = time.Now().Add(duration)
-	} else {
-		ds.ClientIPData[clientIP] = &ClientIPData{
-			Count:        0,
-			Time:         time.Now(),
-			DisableUntil: time.Now().Add(duration),
-		}
+	data, exists := ds.clients[clientIP]
+	if !exists {
+		data = &ClientIPData{time: time.Now()}
+		ds.clients[clientIP] = data
 	}
+
+	data.disableUntil = time.Now().Add(duration)
 }
 
 func (ds *DataSource) GetTimeDisabledClientIP(clientIP string) (time.Time, bool) {
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
 
-	data, exists := ds.ClientIPData[clientIP]
+	data, exists := ds.clients[clientIP]
 	if !exists {
 		return time.Time{}, false
 	}
-	return data.DisableUntil, true
+	return data.disableUntil, true
 }
 
 func (ds *DataSource) GetClientIPCount(clientIP string) int {
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
 
-	if data, exists := ds.ClientIPData[clientIP]; exists {
-		return data.Count
+	if data, exists := ds.clients[clientIP]; exists {
+		return data.count
 	}
 	return 0
 }
 
-func (ds *DataSource) ListClientIPs() map[string]int {
+func (ds *DataSource) listClientIPs() map[string]int {
 	ds.mu.RLock()
 	defer ds.mu.RUnlock()
 
 	clientIPs := make(map[string]int)
-	for ip, data := range ds.ClientIPData {
-		clientIPs[ip] = data.Count
+	for ip, data := range ds.clients {
+		clientIPs[ip] = data.count
 	}
 	return clientIPs
 }
@@ -105,27 +94,24 @@ func (ds *DataSource) ResetClientIP(clientIP string) {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 
-	delete(ds.ClientIPData, clientIP)
+	delete(ds.clients, clientIP)
 }
 
 func (ds *DataSource) ResetDataClientIPs() {
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 
-	ds.ClientIPData = make(map[string]*ClientIPData)
+	ds.clients = make(map[string]*ClientIPData)
 }
 
-func (ds *DataSource) StartCleanupWorker(ctx context.Context, interval time.Duration, ttl time.Duration) {
-	// interval := 30 * time.Second
-	// ttl := 45 * time.Second
-
-	ticker := time.NewTicker(interval)
+func (ds *DataSource) StartCleanupWorker(ctx context.Context) {
+	ticker := time.NewTicker(ds.timeCleanIn)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			ds.cleanupOldData(ttl)
+			ds.cleanupOldData(ds.ttl)
 		case <-ctx.Done():
 			log.Println("Cleanup worker stopped")
 			return
@@ -140,10 +126,9 @@ func (ds *DataSource) cleanupOldData(ttl time.Duration) {
 	now := time.Now()
 	count := 0
 
-	for ip, data := range ds.ClientIPData {
-		if data.DisableUntil.Before(now) && now.Sub(data.Time) > ttl {
-			delete(ds.ClientIPData, ip)
-			log.Printf("Cleaned up data for IP: %s\n", ip)
+	for ip, data := range ds.clients {
+		if data.disableUntil.Before(now) && now.Sub(data.time) > ttl {
+			delete(ds.clients, ip)
 			count++
 		}
 	}

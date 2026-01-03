@@ -9,70 +9,70 @@ import (
 
 func TestCleanupOldData_RemovesStaleEntries(t *testing.T) {
 	ds := &DataSource{
-		ClientIPData: make(map[string]*ClientIPData),
+		clients: make(map[string]*ClientIPData),
 	}
 
 	// Adicionar IP com timestamp antigo
 	oldTime := time.Now().Add(-2 * time.Second)
-	ds.ClientIPData["192.168.1.1"] = &ClientIPData{
-		Count:        5,
-		Time:         oldTime,
-		DisableUntil: time.Time{},
+	ds.clients["192.168.1.1"] = &ClientIPData{
+		count:        5,
+		time:         oldTime,
+		disableUntil: time.Time{},
 	}
 
 	// Adicionar IP recente
-	ds.ClientIPData["192.168.1.2"] = &ClientIPData{
-		Count:        3,
-		Time:         time.Now(),
-		DisableUntil: time.Time{},
+	ds.clients["192.168.1.2"] = &ClientIPData{
+		count:        3,
+		time:         time.Now(),
+		disableUntil: time.Time{},
 	}
 
 	// Executar cleanup com TTL de 1 segundo
 	ds.cleanupOldData(1 * time.Second)
 
 	// Verificar que IP antigo foi removido
-	if _, exists := ds.ClientIPData["192.168.1.1"]; exists {
+	if _, exists := ds.clients["192.168.1.1"]; exists {
 		t.Error("IP antigo não foi removido pelo cleanup")
 	}
 
 	// Verificar que IP recente permanece
-	if _, exists := ds.ClientIPData["192.168.1.2"]; !exists {
+	if _, exists := ds.clients["192.168.1.2"]; !exists {
 		t.Error("IP recente foi removido incorretamente")
 	}
 }
 
 func TestCleanupOldData_RespectsActiveBlocks(t *testing.T) {
 	ds := &DataSource{
-		ClientIPData: make(map[string]*ClientIPData),
+		clients: make(map[string]*ClientIPData),
 	}
 
 	// IP antigo mas ainda bloqueado
 	oldTime := time.Now().Add(-2 * time.Second)
 	futureBlock := time.Now().Add(5 * time.Second)
-	ds.ClientIPData["192.168.1.1"] = &ClientIPData{
-		Count:        10,
-		Time:         oldTime,
-		DisableUntil: futureBlock,
+	ds.clients["192.168.1.1"] = &ClientIPData{
+		count:        10,
+		time:         oldTime,
+		disableUntil: futureBlock,
 	}
 
 	// IP antigo com bloqueio expirado
 	pastBlock := time.Now().Add(-1 * time.Second)
-	ds.ClientIPData["192.168.1.2"] = &ClientIPData{
-		Count:        8,
-		Time:         oldTime,
-		DisableUntil: pastBlock,
+	ds.clients["192.168.1.2"] = &ClientIPData{
+		count:        8,
+		time:         oldTime,
+		disableUntil: pastBlock,
 	}
 
 	// Executar cleanup
 	ds.cleanupOldData(1 * time.Second)
 
 	// IP bloqueado não deve ser removido
-	if _, exists := ds.ClientIPData["192.168.1.1"]; !exists {
+	if _, exists := ds.clients["192.168.1.1"]; !exists {
 		t.Error("IP bloqueado foi removido incorretamente")
 	}
 
 	// IP com bloqueio expirado deve ser removido
-	if _, exists := ds.ClientIPData["192.168.1.2"]; exists {
+	if _, exists := ds.clients["192.168.1.2"]; exists {
 		t.Error("IP com bloqueio expirado não foi removido")
 	}
 }
@@ -80,12 +80,14 @@ func TestCleanupOldData_RespectsActiveBlocks(t *testing.T) {
 func TestCleanupWorker_StopsOnContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	ds := &DataSource{
-		ClientIPData: make(map[string]*ClientIPData),
+		timeCleanIn: 100 * time.Millisecond,
+		ttl:         1 * time.Second,
+		clients:     make(map[string]*ClientIPData),
 	}
 
 	done := make(chan bool)
 	go func() {
-		ds.StartCleanupWorker(ctx, 100*time.Millisecond, 1*time.Second)
+		ds.StartCleanupWorker(ctx)
 		done <- true
 	}()
 
@@ -105,26 +107,28 @@ func TestCleanupWorker_RunsPeriodically(t *testing.T) {
 	defer cancel()
 
 	ds := &DataSource{
-		ClientIPData: make(map[string]*ClientIPData),
+		timeCleanIn: 200 * time.Millisecond,
+		ttl:         1 * time.Second,
+		clients:     make(map[string]*ClientIPData),
 	}
 
 	// Adicionar IP antigo
 	oldTime := time.Now().Add(-2 * time.Second)
-	ds.ClientIPData["192.168.1.1"] = &ClientIPData{
-		Count:        5,
-		Time:         oldTime,
-		DisableUntil: time.Time{},
+	ds.clients["192.168.1.1"] = &ClientIPData{
+		count:        5,
+		time:         oldTime,
+		disableUntil: time.Time{},
 	}
 
 	// Iniciar worker
-	go ds.StartCleanupWorker(ctx, 200*time.Millisecond, 1*time.Second)
+	go ds.StartCleanupWorker(ctx)
 
 	// Aguardar pelo menos um ciclo
 	time.Sleep(300 * time.Millisecond)
 
 	// Verificar que IP foi removido
 	ds.mu.RLock()
-	_, exists := ds.ClientIPData["192.168.1.1"]
+	_, exists := ds.clients["192.168.1.1"]
 	ds.mu.RUnlock()
 
 	if exists {
@@ -134,16 +138,16 @@ func TestCleanupWorker_RunsPeriodically(t *testing.T) {
 
 func TestCleanupOldData_ThreadSafe(t *testing.T) {
 	ds := &DataSource{
-		ClientIPData: make(map[string]*ClientIPData),
+		clients: make(map[string]*ClientIPData),
 	}
 
 	// Adicionar múltiplos IPs
 	for i := 0; i < 100; i++ {
 		ip := "192.168.1." + strconv.Itoa(i)
-		ds.ClientIPData[ip] = &ClientIPData{
-			Count:        i,
-			Time:         time.Now().Add(-2 * time.Second),
-			DisableUntil: time.Time{},
+		ds.clients[ip] = &ClientIPData{
+			count:        i,
+			time:         time.Now().Add(-2 * time.Second),
+			disableUntil: time.Time{},
 		}
 	}
 
@@ -160,7 +164,7 @@ func TestCleanupOldData_ThreadSafe(t *testing.T) {
 	// Ler dados concorrentemente
 	for i := 0; i < 50; i++ {
 		go func() {
-			ds.ListClientIPs()
+			ds.listClientIPs()
 		}()
 	}
 
@@ -169,20 +173,20 @@ func TestCleanupOldData_ThreadSafe(t *testing.T) {
 
 func TestCleanupOldData_EmptyMap(t *testing.T) {
 	ds := &DataSource{
-		ClientIPData: make(map[string]*ClientIPData),
+		clients: make(map[string]*ClientIPData),
 	}
 
 	// Executar cleanup em map vazio
 	ds.cleanupOldData(1 * time.Second)
 
-	if len(ds.ClientIPData) != 0 {
-		t.Errorf("Map deveria estar vazio, mas tem %d entradas", len(ds.ClientIPData))
+	if len(ds.clients) != 0 {
+		t.Errorf("Map deveria estar vazio, mas tem %d entradas", len(ds.clients))
 	}
 }
 
 func TestCleanupOldData_MultipleStaleEntries(t *testing.T) {
 	ds := &DataSource{
-		ClientIPData: make(map[string]*ClientIPData),
+		clients: make(map[string]*ClientIPData),
 	}
 
 	oldTime := time.Now().Add(-5 * time.Second)
@@ -190,24 +194,24 @@ func TestCleanupOldData_MultipleStaleEntries(t *testing.T) {
 	// Adicionar 5 IPs antigos
 	for i := 1; i <= 5; i++ {
 		ip := "192.168.1." + strconv.Itoa(i)
-		ds.ClientIPData[ip] = &ClientIPData{
-			Count:        i,
-			Time:         oldTime,
-			DisableUntil: time.Time{},
+		ds.clients[ip] = &ClientIPData{
+			count:        i,
+			time:         oldTime,
+			disableUntil: time.Time{},
 		}
 	}
 
 	// Adicionar 3 IPs recentes
 	for i := 6; i <= 8; i++ {
 		ip := "192.168.1." + strconv.Itoa(i)
-		ds.ClientIPData[ip] = &ClientIPData{
-			Count:        i,
-			Time:         time.Now(),
-			DisableUntil: time.Time{},
+		ds.clients[ip] = &ClientIPData{
+			count:        i,
+			time:         time.Now(),
+			disableUntil: time.Time{},
 		}
 	}
 
-	initialCount := len(ds.ClientIPData)
+	initialCount := len(ds.clients)
 	if initialCount != 8 {
 		t.Fatalf("Esperado 8 IPs iniciais, mas tem %d", initialCount)
 	}
@@ -216,7 +220,7 @@ func TestCleanupOldData_MultipleStaleEntries(t *testing.T) {
 	ds.cleanupOldData(2 * time.Second)
 
 	// Verificar que apenas 3 IPs permanecem
-	if len(ds.ClientIPData) != 3 {
-		t.Errorf("Esperado 3 IPs após cleanup, mas tem %d", len(ds.ClientIPData))
+	if len(ds.clients) != 3 {
+		t.Errorf("Esperado 3 IPs após cleanup, mas tem %d", len(ds.clients))
 	}
 }
