@@ -17,7 +17,11 @@ func (mb *MemoryBackend) Get(clientIP string) (*ClientIPData, error) {
 	mb.mu.RLock()
 	defer mb.mu.RUnlock()
 
-	return mb.data[clientIP], nil
+	data, exists := mb.data[clientIP]
+	if !exists {
+		return nil, ErrNotFound
+	}
+	return data, nil
 }
 
 func (mb *MemoryBackend) Set(clientIP string, data *ClientIPData) error {

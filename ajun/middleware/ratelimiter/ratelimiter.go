@@ -23,6 +23,8 @@ type RateLimiterConfig struct {
 	Delay       time.Duration
 	TokenLimit  int
 	TokenDelay  time.Duration
+	Backend     StorageBackend
+	Addr        string
 	TimeCleanIn time.Duration
 	TTL         time.Duration
 }
@@ -31,18 +33,21 @@ func NewRateLimiter(ctx context.Context, config RateLimiterConfig) *RateLimiter 
 	return &RateLimiter{
 		config: config,
 		storage: *NewStorage(ctx,
-			NewRedisBackend(ctx, "localhost:6379"),
+			config.Backend,
+			config.Addr,
 			config.TimeCleanIn,
 			config.TTL),
 	}
 }
 
-func NewRateLimiterConfig(limit int, delay time.Duration, tokenLimit int, tokenDelay time.Duration, timeCleanIn time.Duration, ttl time.Duration) RateLimiterConfig {
+func NewRateLimiterConfig(limit int, delay time.Duration, tokenLimit int, tokenDelay time.Duration, backend StorageBackend, addr string, timeCleanIn time.Duration, ttl time.Duration) RateLimiterConfig {
 	return RateLimiterConfig{
 		Limit:       limit,
 		Delay:       delay,
 		TokenLimit:  tokenLimit,
 		TokenDelay:  tokenDelay,
+		Backend:     backend,
+		Addr:        addr,
 		TimeCleanIn: timeCleanIn,
 		TTL:         ttl,
 	}

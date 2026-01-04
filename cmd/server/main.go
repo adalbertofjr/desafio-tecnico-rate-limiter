@@ -37,11 +37,15 @@ func main() {
 		panic(err)
 	}
 
+	addrBackend := config.RateLimiterRedisAddr
+
 	rateLimiterConfig := ratelimiter.NewRateLimiterConfig(
 		limitMaxRequests,
 		timeDelay,
 		tokenMaxRequests,
 		tokenTimeDelay,
+		ratelimiter.Redis,
+		addrBackend,
 		timeCleanIn,
 		ttl)
 
@@ -54,9 +58,9 @@ func main() {
 	ajunRouter.HandleFunc("/health", healthHandler)
 	ajunRouter.HandleFunc("/products", listProductsHandler)
 
-	addr := ":8080"
-	fmt.Println("Starting web server on port:", addr)
-	http.ListenAndServe(addr, ajunRouter.Handler)
+	addrServer := config.ServerPort
+	fmt.Println("Starting web server on port", addrServer)
+	http.ListenAndServe(addrServer, ajunRouter.Handler)
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {

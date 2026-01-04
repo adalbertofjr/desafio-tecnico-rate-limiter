@@ -13,7 +13,7 @@ import (
 func TestRateLimiter_AllowsRequestsBelowLimit(t *testing.T) {
 	ctx := context.Background()
 	router := NewRouter(ctx)
-	config := ratelimiter.NewRateLimiterConfig(5, time.Second*4, 0, 0, 30*time.Second, 45*time.Second)
+	config := ratelimiter.NewRateLimiterConfig(5, time.Second*4, 0, 0, ratelimiter.Memory, "", 30*time.Second, 45*time.Second)
 	router.RateLimiter(config)
 	defer router.ResetGlobalState()
 
@@ -40,7 +40,7 @@ func TestRateLimiter_AllowsRequestsBelowLimit(t *testing.T) {
 func TestRateLimiter_BlocksRequestsAboveLimit(t *testing.T) {
 	ctx := context.Background()
 	router := NewRouter(ctx)
-	config := ratelimiter.NewRateLimiterConfig(5, time.Second*4, 0, 0, 30*time.Second, 45*time.Second)
+	config := ratelimiter.NewRateLimiterConfig(5, time.Second*4, 0, 0, ratelimiter.Memory, "", 30*time.Second, 45*time.Second)
 	router.RateLimiter(config)
 	defer router.ResetGlobalState()
 
@@ -80,7 +80,7 @@ func TestRateLimiter_UnblocksAfterTimeout(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	// Criar router com timeout curto para teste
-	config := ratelimiter.NewRateLimiterConfig(3, time.Second*1, 0, 0, 30*time.Second, 45*time.Second)
+	config := ratelimiter.NewRateLimiterConfig(3, time.Second*1, 0, 0, ratelimiter.Memory, "", 30*time.Second, 45*time.Second)
 	ctx := context.Background()
 	rateLimiter := ratelimiter.NewRateLimiter(ctx, config)
 	defer rateLimiter.ResetGlobalState()
@@ -128,7 +128,7 @@ func TestRateLimiter_UnblocksAfterTimeout(t *testing.T) {
 
 func TestRateLimiter_DifferentIPsAreIndependent(t *testing.T) {
 	// Criar router com limite de 3 requisições
-	config := ratelimiter.NewRateLimiterConfig(3, time.Second*1, 0, 0, 30*time.Second, 45*time.Second)
+	config := ratelimiter.NewRateLimiterConfig(3, time.Second*1, 0, 0, ratelimiter.Memory, "", 30*time.Second, 45*time.Second)
 	ctx := context.Background()
 	rateLimiter := ratelimiter.NewRateLimiter(ctx, config)
 	defer rateLimiter.ResetGlobalState()
@@ -173,7 +173,7 @@ func TestRateLimiter_DifferentIPsAreIndependent(t *testing.T) {
 func TestRateLimiter_ConcurrentRequests(t *testing.T) {
 	ctx := context.Background()
 	router := NewRouter(ctx)
-	config := ratelimiter.NewRateLimiterConfig(5, time.Second*4, 0, 0, 30*time.Second, 45*time.Second)
+	config := ratelimiter.NewRateLimiterConfig(5, time.Second*4, 0, 0, ratelimiter.Memory, "", 30*time.Second, 45*time.Second)
 	router.RateLimiter(config)
 	defer router.ResetGlobalState()
 
@@ -225,7 +225,7 @@ func TestRateLimiter_ConcurrentRequests(t *testing.T) {
 func TestRateLimiter_HandlesIPv4AndIPv6(t *testing.T) {
 	ctx := context.Background()
 	router := NewRouter(ctx)
-	config := ratelimiter.NewRateLimiterConfig(5, time.Second*4, 0, 0, 30*time.Second, 45*time.Second)
+	config := ratelimiter.NewRateLimiterConfig(5, time.Second*4, 0, 0, ratelimiter.Memory, "", 30*time.Second, 45*time.Second)
 	router.RateLimiter(config)
 	defer router.ResetGlobalState()
 
@@ -259,7 +259,7 @@ func TestRateLimiter_WithAPIKey_AllowsRequestsBelowTokenLimit(t *testing.T) {
 	ctx := context.Background()
 	router := NewRouter(ctx)
 	// Configurar: limite IP = 2, limite Token = 10
-	config := ratelimiter.NewRateLimiterConfig(2, time.Second*4, 10, time.Second*4, 30*time.Second, 45*time.Second)
+	config := ratelimiter.NewRateLimiterConfig(2, time.Second*4, 10, time.Second*4, ratelimiter.Memory, "", 30*time.Second, 45*time.Second)
 	router.RateLimiter(config)
 	defer router.ResetGlobalState()
 
@@ -288,7 +288,7 @@ func TestRateLimiter_WithAPIKey_BlocksRequestsAboveTokenLimit(t *testing.T) {
 	ctx := context.Background()
 	router := NewRouter(ctx)
 	// Configurar: limite IP = 2, limite Token = 5
-	config := ratelimiter.NewRateLimiterConfig(2, time.Second*4, 5, time.Second*4, 30*time.Second, 45*time.Second)
+	config := ratelimiter.NewRateLimiterConfig(2, time.Second*4, 5, time.Second*4, ratelimiter.Memory, "", 30*time.Second, 45*time.Second)
 	router.RateLimiter(config)
 	defer router.ResetGlobalState()
 
@@ -326,7 +326,7 @@ func TestRateLimiter_WithAPIKey_HasDifferentLimitThanIP(t *testing.T) {
 	ctx := context.Background()
 	router := NewRouter(ctx)
 	// Configurar: limite IP = 3, limite Token = 10
-	config := ratelimiter.NewRateLimiterConfig(3, time.Second*4, 10, time.Second*4, 30*time.Second, 45*time.Second)
+	config := ratelimiter.NewRateLimiterConfig(3, time.Second*4, 10, time.Second*4, ratelimiter.Memory, "", 30*time.Second, 45*time.Second)
 	router.RateLimiter(config)
 	defer router.ResetGlobalState()
 
@@ -358,7 +358,7 @@ func TestRateLimiter_WithAPIKey_HasDifferentLimitThanIP(t *testing.T) {
 
 func TestRateLimiter_WithAPIKey_UnblocksAfterTokenTimeout(t *testing.T) {
 	// Criar router com timeout curto para teste com token
-	config := ratelimiter.NewRateLimiterConfig(2, time.Second*2, 3, time.Millisecond*600, 30*time.Second, 45*time.Second)
+	config := ratelimiter.NewRateLimiterConfig(2, time.Second*2, 3, time.Millisecond*600, ratelimiter.Memory, "", 30*time.Second, 45*time.Second)
 	ctx := context.Background()
 	rateLimiter := ratelimiter.NewRateLimiter(ctx, config)
 	defer rateLimiter.ResetGlobalState()
@@ -400,7 +400,7 @@ func TestRateLimiter_WithAPIKey_DifferentIPsSameKey(t *testing.T) {
 	ctx := context.Background()
 	router := NewRouter(ctx)
 	// Configurar: limite IP = 2, limite Token = 5
-	config := ratelimiter.NewRateLimiterConfig(2, time.Second*4, 5, time.Second*4, 30*time.Second, 45*time.Second)
+	config := ratelimiter.NewRateLimiterConfig(2, time.Second*4, 5, time.Second*4, ratelimiter.Memory, "", 30*time.Second, 45*time.Second)
 	router.RateLimiter(config)
 	defer router.ResetGlobalState()
 

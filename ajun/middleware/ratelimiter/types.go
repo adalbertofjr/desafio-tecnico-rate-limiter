@@ -1,6 +1,11 @@
 package ratelimiter
 
-import "time"
+import (
+	"errors"
+	"time"
+)
+
+var ErrNotFound = errors.New("client IP not found")
 
 type ClientIPData struct {
 	Count        int

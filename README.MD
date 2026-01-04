@@ -119,12 +119,14 @@ func main() {
     
     // Configurar rate limiter
     config := ratelimiter.NewRateLimiterConfig(
-        100,              // limite por IP
-        time.Minute,      // delay de bloqueio IP
-        200,              // limite por token
-        time.Minute,      // delay de bloqueio token
-        10*time.Minute,   // intervalo de cleanup
-        1*time.Hour,      // TTL dos dados
+        100,                    // limite por IP
+        time.Minute,            // delay de bloqueio IP
+        200,                    // limite por token
+        time.Minute,            // delay de bloqueio token
+        ratelimiter.Memory,     // backend (Memory ou Redis)
+        "",                     // endereço Redis (vazio para Memory)
+        10*time.Minute,         // intervalo de cleanup
+        1*time.Hour,            // TTL dos dados
     )
     
     // Criar router
@@ -142,30 +144,26 @@ func main() {
 func mainWithRedis() {
     ctx := context.Background()
     
-    // Criar backend Redis (passa o endereço diretamente)
-    redisBackend := ratelimiter.NewRedisBackend(ctx, "localhost:6379")
-    
-    // Criar Storage com backend Redis
-    storage := ratelimiter.NewStorage(
-        ctx,
-        redisBackend,           // Strategy Pattern em ação
-        10*time.Minute,         // cleanup interval
-        1*time.Hour,            // TTL
-    )
-    
-    // Configurar rate limiter
+    // Configurar rate limiter com Redis
     config := ratelimiter.NewRateLimiterConfig(
-        100,              // limite por IP
-        time.Minute,      // delay de bloqueio IP
-        200,              // limite por token
-        time.Minute,      // delay de bloqueio token
-        10*time.Minute,   // intervalo de cleanup
-        1*time.Hour,      // TTL dos dados
+        100,                    // limite por IP
+        time.Minute,            // delay de bloqueio IP
+        200,                    // limite por token
+        time.Minute,            // delay de bloqueio token
+        ratelimiter.Redis,      // backend Redis
+        "localhost:6379",       // endereço do Redis
+        10*time.Minute,         // intervalo de cleanup
+        1*time.Hour,            // TTL dos dados
     )
     
     router := ajun.NewRouter(ctx)
     router.RateLimiter(config)
-    // Storage com Redis será usado automaticamente
+    
+    // Adicionar handlers
+    router.HandleFunc("/api/resource", yourHandler)
+    
+    // Iniciar servidor
+    http.ListenAndServe(":8080", router.Handler)
 }
 ```
 
@@ -385,15 +383,15 @@ go test ./... -race
 
 ```
 router:              100.0% ✅
-middleware/ratelimiter: 100.0% ✅
-storage:             100.0% ✅
-memory backend:      100.0% ✅
-redis backend:       100.0% ✅
+middleware/ratelimiter: 92.5% ✅
+storage:              79.7% ✅
+memory backend:       86.5% ✅
+redis backend:        78.4% ✅
 ```
 
-**Total: 53 testes**
+**Total: 67 testes**
 - 11 testes de integração (router)
-- 18 testes unitários (ratelimiter)
+- 32 testes unitários (ratelimiter)
 - 12 testes de backend memory
 - 12 testes de backend Redis (com miniredis)
 

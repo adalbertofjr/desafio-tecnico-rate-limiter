@@ -80,8 +80,8 @@ func TestMemoryBackend_Get_NotFound(t *testing.T) {
 	backend := NewMemoryBackend()
 
 	result, err := backend.Get("ip-inexistente")
-	if err != nil {
-		t.Fatalf("Get() error = %v", err)
+	if err != ErrNotFound {
+		t.Fatalf("esperado ErrNotFound, got %v", err)
 	}
 
 	if result != nil {

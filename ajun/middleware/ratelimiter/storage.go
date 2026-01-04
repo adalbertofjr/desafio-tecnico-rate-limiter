@@ -7,6 +7,13 @@ import (
 	"time"
 )
 
+type StorageBackend int
+
+const (
+	Memory StorageBackend = iota
+	Redis
+)
+
 type Storage struct {
 	mu          sync.RWMutex
 	backend     Backend
@@ -14,9 +21,11 @@ type Storage struct {
 	ttl         time.Duration
 }
 
-func NewStorage(ctx context.Context, backend Backend, timeCleanIn time.Duration, ttl time.Duration) *Storage {
+func NewStorage(ctx context.Context, backend StorageBackend, addr string, timeCleanIn time.Duration, ttl time.Duration) *Storage {
+	backendImpl := setStorageBackend(ctx, backend, addr)
+
 	s := &Storage{
-		backend:     backend,
+		backend:     backendImpl,
 		timeCleanIn: timeCleanIn,
 		ttl:         ttl,
 	}
@@ -24,6 +33,17 @@ func NewStorage(ctx context.Context, backend Backend, timeCleanIn time.Duration,
 	go s.StartCleanupWorker(ctx)
 
 	return s
+}
+
+func setStorageBackend(ctx context.Context, backend StorageBackend, addr string) Backend {
+	switch backend {
+	case Memory:
+		return NewMemoryBackend()
+	case Redis:
+		return NewRedisBackend(ctx, addr)
+	default:
+		return NewMemoryBackend()
+	}
 }
 
 func (s *Storage) AddClientIP(clientIP string) {
