@@ -91,7 +91,7 @@ func TestRateLimiterHandler_BlocksRequestsAboveLimit(t *testing.T) {
 				t.Errorf("Requisição %d: esperado 429, recebeu %d", i+1, w.Code)
 			}
 
-			if w.Body.String() != "Too many requests" {
+			if w.Body.String() != "You have reached the maximum number of requests or actions allowed within a certain time frame." {
 				t.Errorf("Requisição %d: mensagem incorreta: %s", i+1, w.Body.String())
 			}
 		}
@@ -439,7 +439,7 @@ func TestRateLimiterHandler_WithAPIKey_BlocksRequestsAboveTokenLimit(t *testing.
 				t.Errorf("Requisição %d com API_KEY: esperado 429, recebeu %d", i+1, w.Code)
 			}
 
-			if w.Body.String() != "Too many requests" {
+			if w.Body.String() != "You have reached the maximum number of requests or actions allowed within a certain time frame." {
 				t.Errorf("Requisição %d: mensagem incorreta: %s", i+1, w.Body.String())
 			}
 		}

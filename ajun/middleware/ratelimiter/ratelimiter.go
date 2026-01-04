@@ -9,6 +9,10 @@ import (
 	"time"
 )
 
+const (
+	MESSAGE_429 = "You have reached the maximum number of requests or actions allowed within a certain time frame."
+)
+
 type RateLimiter struct {
 	config  RateLimiterConfig
 	storage Storage
@@ -27,7 +31,7 @@ func NewRateLimiter(ctx context.Context, config RateLimiterConfig) *RateLimiter 
 	return &RateLimiter{
 		config: config,
 		storage: *NewStorage(ctx,
-			NewRedisBackend(ctx),
+			NewRedisBackend(ctx, "localhost:6379"),
 			config.TimeCleanIn,
 			config.TTL),
 	}
@@ -46,33 +50,30 @@ func NewRateLimiterConfig(limit int, delay time.Duration, tokenLimit int, tokenD
 
 func (rl *RateLimiter) RateLimiterHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiToken := r.Header.Get("Api_key")
+
 		ip := r.RemoteAddr
 		clientIP, _, err := net.SplitHostPort(ip)
 		if err != nil {
 			clientIP = strings.Split(ip, ":")[0]
 		}
 
-		apiToken := r.Header.Get("Api_key")
-
 		if rl.isRemoteAddrDisabled(clientIP, apiToken) {
 			w.WriteHeader(http.StatusTooManyRequests)
-			w.Write([]byte("Too many requests"))
+			w.Write([]byte(MESSAGE_429))
 			return
 		}
 
-		rl.storage.AddClientIP(clientIP)
 		next.ServeHTTP(w, r)
 	})
 }
 
-func (rl *RateLimiter) isRemoteAddrDisabled(host string, apiToken string) bool {
-	timeDisable, exists := rl.storage.GetTimeDisabledClientIP(host)
+func (rl *RateLimiter) isRemoteAddrDisabled(clientIP string, apiToken string) bool {
+	timeDisable, exists := rl.storage.GetTimeDisabledClientIP(clientIP)
 
 	if exists && timeDisable.After(time.Now()) {
 		return true
 	}
-
-	hostCountRequests := rl.storage.GetClientIPCount(host)
 
 	var maxRequests int
 	var timeDelay time.Duration
@@ -84,13 +85,16 @@ func (rl *RateLimiter) isRemoteAddrDisabled(host string, apiToken string) bool {
 		timeDelay = rl.config.Delay
 	}
 
+	// Incrementa e verifica atomicamente para evitar race conditions
+	hostCountRequests := rl.storage.IncrementAndGetCount(clientIP)
+
 	if hostCountRequests > maxRequests {
-		rl.storage.DisableClientIP(host, timeDelay)
-		fmt.Printf("Disable host: %s - %s\n", host, time.Now().Format(time.TimeOnly))
+		rl.storage.DisableClientIP(clientIP, timeDelay)
+		fmt.Printf("Disable host: %s - %s\n", clientIP, time.Now().Format(time.TimeOnly))
 
 		time.AfterFunc(timeDelay, func() {
-			rl.storage.ResetClientIP(host)
-			fmt.Printf("Enable host: %s - %s\n", host, time.Now().Format(time.TimeOnly))
+			rl.storage.ResetClientIP(clientIP)
+			fmt.Printf("Enable host: %s - %s\n", clientIP, time.Now().Format(time.TimeOnly))
 		})
 		return true
 	}

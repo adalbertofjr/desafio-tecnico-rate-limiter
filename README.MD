@@ -142,11 +142,8 @@ func main() {
 func mainWithRedis() {
     ctx := context.Background()
     
-    // Criar backend Redis
-    redisClient := redis.NewClient(&redis.Options{
-        Addr: "localhost:6379",
-    })
-    redisBackend := ratelimiter.NewRedisBackend(ctx, redisClient)
+    // Criar backend Redis (passa o endereço diretamente)
+    redisBackend := ratelimiter.NewRedisBackend(ctx, "localhost:6379")
     
     // Criar Storage com backend Redis
     storage := ratelimiter.NewStorage(
@@ -196,7 +193,7 @@ Limitada por token conforme `RATE_LIMITER_TOKEN_MAX_REQUESTS`.
 HTTP/1.1 429 Too Many Requests
 Content-Type: text/plain
 
-Too many requests
+You have reached the maximum number of requests or actions allowed within a certain time frame.
 ```
 
 ## 🏗️ Arquitetura
@@ -296,6 +293,8 @@ type RedisBackend struct {
     client *redis.Client
     mu     sync.RWMutex
 }
+
+// Observação: NewRedisBackend(ctx, "localhost:6379") cria o cliente internamente
 
 // Context que usa a Strategy
 type Storage struct {

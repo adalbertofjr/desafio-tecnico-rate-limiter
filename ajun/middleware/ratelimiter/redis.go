@@ -14,12 +14,12 @@ type RedisBackend struct {
 	client *redis.Client
 }
 
-func NewRedisBackend(ctx context.Context) *RedisBackend {
+func NewRedisBackend(ctx context.Context, addr string) *RedisBackend {
 	return &RedisBackend{
 		mu:  sync.RWMutex{},
 		ctx: ctx,
 		client: redis.NewClient(&redis.Options{
-			Addr: "localhost:6379",
+			Addr: addr,
 		}),
 	}
 }

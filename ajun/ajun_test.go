@@ -68,8 +68,8 @@ func TestRateLimiter_BlocksRequestsAboveLimit(t *testing.T) {
 			}
 
 			body := w.Body.String()
-			if body != "Too many requests" {
-				t.Errorf("Esperado mensagem 'Too many requests', recebeu '%s'", body)
+			if body != "You have reached the maximum number of requests or actions allowed within a certain time frame." {
+				t.Errorf("Esperado mensagem 'You have reached the maximum number of requests or actions allowed within a certain time frame.', recebeu '%s'", body)
 			}
 		}
 	}

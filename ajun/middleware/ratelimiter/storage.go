@@ -46,10 +46,8 @@ func (s *Storage) DisableClientIP(clientIP string, duration time.Duration) {
 
 	data, err := s.backend.Get(clientIP)
 	if err != nil {
-		data = &ClientIPData{}
+		data = &ClientIPData{Time: time.Now()}
 	}
-	data.Count++
-	data.Time = time.Now()
 	data.DisableUntil = time.Now().Add(duration)
 
 	s.backend.Set(clientIP, data)
@@ -75,6 +73,23 @@ func (s *Storage) GetClientIPCount(clientIP string) int {
 	if err != nil {
 		return 0
 	}
+
+	return data.Count
+}
+
+// IncrementAndGetCount incrementa o contador e retorna o novo valor atomicamente
+func (s *Storage) IncrementAndGetCount(clientIP string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	data, err := s.backend.Get(clientIP)
+	if err != nil {
+		data = &ClientIPData{}
+	}
+	data.Count++
+	data.Time = time.Now()
+
+	s.backend.Set(clientIP, data)
 
 	return data.Count
 }
