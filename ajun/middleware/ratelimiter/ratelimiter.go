@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-type rateLimiter struct {
+type RateLimiter struct {
 	config  RateLimiterConfig
 	storage Storage
 }
@@ -23,14 +23,13 @@ type RateLimiterConfig struct {
 	TTL         time.Duration
 }
 
-func NewRateLimiter(ctx context.Context, config RateLimiterConfig) *rateLimiter {
-	return &rateLimiter{
+func NewRateLimiter(ctx context.Context, config RateLimiterConfig) *RateLimiter {
+	return &RateLimiter{
 		config: config,
 		storage: *NewStorage(ctx,
-			NewMemoryBackend(),
+			NewRedisBackend(ctx),
 			config.TimeCleanIn,
 			config.TTL),
-		// datasource: local.NewLocalStorage(ctx, config.TimeCleanIn, config.TTL),
 	}
 }
 
@@ -45,7 +44,7 @@ func NewRateLimiterConfig(limit int, delay time.Duration, tokenLimit int, tokenD
 	}
 }
 
-func (rl *rateLimiter) RateLimiterHandler(next http.Handler) http.Handler {
+func (rl *RateLimiter) RateLimiterHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := r.RemoteAddr
 		clientIP, _, err := net.SplitHostPort(ip)
@@ -53,7 +52,6 @@ func (rl *rateLimiter) RateLimiterHandler(next http.Handler) http.Handler {
 			clientIP = strings.Split(ip, ":")[0]
 		}
 
-		rl.storage.AddClientIP(clientIP)
 		apiToken := r.Header.Get("Api_key")
 
 		if rl.isRemoteAddrDisabled(clientIP, apiToken) {
@@ -62,11 +60,12 @@ func (rl *rateLimiter) RateLimiterHandler(next http.Handler) http.Handler {
 			return
 		}
 
+		rl.storage.AddClientIP(clientIP)
 		next.ServeHTTP(w, r)
 	})
 }
 
-func (rl *rateLimiter) isRemoteAddrDisabled(host string, apiToken string) bool {
+func (rl *RateLimiter) isRemoteAddrDisabled(host string, apiToken string) bool {
 	timeDisable, exists := rl.storage.GetTimeDisabledClientIP(host)
 
 	if exists && timeDisable.After(time.Now()) {
@@ -99,6 +98,6 @@ func (rl *rateLimiter) isRemoteAddrDisabled(host string, apiToken string) bool {
 	return false
 }
 
-func (rl *rateLimiter) ResetGlobalState() {
+func (rl *RateLimiter) ResetGlobalState() {
 	rl.storage.ResetDataClientIPs()
 }

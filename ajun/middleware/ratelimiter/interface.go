@@ -5,4 +5,5 @@ type Backend interface {
 	Set(clientIP string, data *ClientIPData) error
 	Delete(clientIP string) error
 	List() (map[string]*ClientIPData, error)
+	Clear() error
 }

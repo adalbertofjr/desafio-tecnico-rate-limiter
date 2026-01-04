@@ -1,0 +1,38 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: ajun-rate-limiter-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - redis-network
+    restart: unless-stopped
+
+  redis-insight:
+    image: rediscommander/redis-commander:latest
+    container_name: ajun-redis-commander
+    environment:
+      - REDIS_HOSTS=local:ajun-rate-limiter-redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - redis-network
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+    driver: local
+
+networks:
+  redis-network:
+    driver: bridge

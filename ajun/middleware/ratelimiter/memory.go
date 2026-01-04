@@ -48,3 +48,11 @@ func (mb *MemoryBackend) List() (map[string]*ClientIPData, error) {
 	}
 	return copyData, nil
 }
+
+func (mb *MemoryBackend) Clear() error {
+	mb.mu.Lock()
+	defer mb.mu.Unlock()
+
+	mb.data = make(map[string]*ClientIPData)
+	return nil
+}

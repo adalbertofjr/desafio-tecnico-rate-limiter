@@ -37,8 +37,9 @@ func (s *Storage) AddClientIP(clientIP string) {
 		data = &ClientIPData{}
 		s.clients[clientIP] = data
 	}
-	data.count++
-	data.time = time.Now()
+	data.Count++
+	data.Time = time.Now()
+	s.backend.Set(clientIP, data)
 }
 
 func (s *Storage) DisableClientIP(clientIP string, duration time.Duration) {
@@ -47,32 +48,36 @@ func (s *Storage) DisableClientIP(clientIP string, duration time.Duration) {
 
 	data, exists := s.clients[clientIP]
 	if !exists {
-		data = &ClientIPData{time: time.Now()}
+		data = &ClientIPData{Time: time.Now()}
 		s.clients[clientIP] = data
 	}
 
-	data.disableUntil = time.Now().Add(duration)
+	data.DisableUntil = time.Now().Add(duration)
+	s.backend.Set(clientIP, data)
 }
 
 func (s *Storage) GetTimeDisabledClientIP(clientIP string) (time.Time, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	data, exists := s.clients[clientIP]
-	if !exists {
+	// data, exists := s.clients[clientIP]
+	data, err := s.backend.Get(clientIP)
+	if err != nil {
 		return time.Time{}, false
 	}
-	return data.disableUntil, true
+	return data.DisableUntil, true
 }
 
 func (s *Storage) GetClientIPCount(clientIP string) int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if data, exists := s.clients[clientIP]; exists {
-		return data.count
+	data, err := s.backend.Get(clientIP)
+	if err != nil {
+		return 0
 	}
-	return 0
+
+	return data.Count
 }
 
 func (s *Storage) ListClientIPs() map[string]int {
@@ -81,7 +86,7 @@ func (s *Storage) ListClientIPs() map[string]int {
 
 	clientIPs := make(map[string]int)
 	for ip, data := range s.clients {
-		clientIPs[ip] = data.count
+		clientIPs[ip] = data.Count
 	}
 	return clientIPs
 }
@@ -90,7 +95,9 @@ func (s *Storage) ResetClientIP(clientIP string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// delete(s.clients, clientIP)
 	delete(s.clients, clientIP)
+	s.backend.Delete(clientIP)
 }
 
 func (s *Storage) ResetDataClientIPs() {
@@ -98,6 +105,7 @@ func (s *Storage) ResetDataClientIPs() {
 	defer s.mu.Unlock()
 
 	s.clients = make(map[string]*ClientIPData)
+	s.backend.Clear()
 }
 
 func (s *Storage) StartCleanupWorker(ctx context.Context) {
@@ -123,7 +131,7 @@ func (s *Storage) cleanupOldData(ttl time.Duration) {
 	count := 0
 
 	for ip, data := range s.clients {
-		if data.disableUntil.Before(now) && now.Sub(data.time) > ttl {
+		if data.DisableUntil.Before(now) && now.Sub(data.Time) > ttl {
 			delete(s.clients, ip)
 			count++
 		}

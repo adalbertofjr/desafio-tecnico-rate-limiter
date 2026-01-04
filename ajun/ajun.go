@@ -10,7 +10,7 @@ type ajun struct {
 	ctx         context.Context
 	router      *http.ServeMux
 	Handler     http.Handler
-	rateLimiter interface{ ResetGlobalState() } // Interface para acessar reset
+	rateLimiter *ratelimiter.RateLimiter
 }
 
 func newMux() *http.ServeMux {

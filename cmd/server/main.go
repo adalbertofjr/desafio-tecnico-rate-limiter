@@ -37,7 +37,13 @@ func main() {
 		panic(err)
 	}
 
-	rateLimiterConfig := ratelimiter.NewRateLimiterConfig(limitMaxRequests, timeDelay, tokenMaxRequests, tokenTimeDelay, timeCleanIn, ttl)
+	rateLimiterConfig := ratelimiter.NewRateLimiterConfig(
+		limitMaxRequests,
+		timeDelay,
+		tokenMaxRequests,
+		tokenTimeDelay,
+		timeCleanIn,
+		ttl)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
