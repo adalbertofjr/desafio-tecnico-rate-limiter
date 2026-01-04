@@ -56,12 +56,7 @@ func NewRateLimiterConfig(limit int, delay time.Duration, tokenLimit int, tokenD
 func (rl *RateLimiter) RateLimiterHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		apiToken := r.Header.Get("Api_key")
-
-		ip := r.RemoteAddr
-		clientIP, _, err := net.SplitHostPort(ip)
-		if err != nil {
-			clientIP = strings.Split(ip, ":")[0]
-		}
+		clientIP := rl.getClientIP(r)
 
 		if rl.isRemoteAddrDisabled(clientIP, apiToken) {
 			w.WriteHeader(http.StatusTooManyRequests)
@@ -71,6 +66,27 @@ func (rl *RateLimiter) RateLimiterHandler(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// getClientIP extrai o IP do cliente, considerando proxies e load balancers
+func (rl *RateLimiter) getClientIP(r *http.Request) string {
+	// 1. Tentar X-Forwarded-For (proxies/load balancers)
+	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
+		// Formato: "client, proxy1, proxy2"
+		// Pegar o primeiro IP (cliente real)
+		ips := strings.Split(forwarded, ",")
+		clientIP := strings.TrimSpace(ips[0])
+		return clientIP // Já vem sem porta
+	}
+
+	// 2. Fallback: RemoteAddr (conexão direta)
+	ip := r.RemoteAddr
+	clientIP, _, err := net.SplitHostPort(ip)
+	if err != nil {
+		// Se falhar, retorna o IP como está (pode ser IPv6 sem porta)
+		return ip
+	}
+	return clientIP
 }
 
 func (rl *RateLimiter) isRemoteAddrDisabled(clientIP string, apiToken string) bool {

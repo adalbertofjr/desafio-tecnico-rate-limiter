@@ -1,4 +1,24 @@
 services:
+  # Aplicação Rate Limiter
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ajun-rate-limiter-app
+    ports:
+      - "8080:8080"
+    env_file:
+      - cmd/server/.env
+    environment:
+      - RATE_LIMITER_REDIS_ADDR=redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - redis-network
+    restart: unless-stopped
+
+  # Redis
   redis:
     image: redis:7-alpine
     container_name: ajun-rate-limiter-redis
