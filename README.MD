@@ -1,8 +1,8 @@
 # Rate Limiter - Desafio Técnico FullCycle
 
 [![Go Version](https://img.shields.io/badge/Go-1.23-blue.svg)](https://golang.org)
-[![Tests](https://img.shields.io/badge/tests-53%20passing-brightgreen.svg)](https://github.com)
-[![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)](https://github.com)
+[![Tests](https://img.shields.io/badge/tests-67%20passing-brightgreen.svg)](https://github.com)
+[![Coverage](https://img.shields.io/badge/coverage-93.5%25-brightgreen.svg)](https://github.com)
 [![Architecture](https://img.shields.io/badge/pattern-Strategy-orange.svg)](https://refactoring.guru/design-patterns/strategy)
 
 Middleware HTTP para controle de taxa de requisições (rate limiting) desenvolvido em Go, com suporte a limitação por IP e por token de API.
@@ -61,7 +61,6 @@ RATE_LIMITER_CLEANUP_INTERVAL=10m
 RATE_LIMITER_TTL=1h
 
 # Configuração do Backend (opcional)
-RATE_LIMITER_BACKEND=memory  # ou 'redis'
 RATE_LIMITER_REDIS_ADDR=localhost:6379
 ```
 
@@ -107,64 +106,69 @@ O servidor iniciará na porta **8080**.
 package main
 
 import (
+    "adalbertofjr/desafio-rate-limiter/ajun"
+    "adalbertofjr/desafio-rate-limiter/ajun/middleware/ratelimiter"
+    "adalbertofjr/desafio-rate-limiter/cmd/configs"
     "context"
-    "github.com/seu-usuario/rate-limiter/ajun"
-    "github.com/seu-usuario/rate-limiter/ajun/middleware"
+    "fmt"
     "net/http"
-    "time"
 )
 
 func main() {
-    ctx := context.Background()
-    
-    // Configurar rate limiter
-    config := ratelimiter.NewRateLimiterConfig(
-        100,                    // limite por IP
-        time.Minute,            // delay de bloqueio IP
-        200,                    // limite por token
-        time.Minute,            // delay de bloqueio token
-        ratelimiter.Memory,     // backend (Memory ou Redis)
-        "",                     // endereço Redis (vazio para Memory)
-        10*time.Minute,         // intervalo de cleanup
-        1*time.Hour,            // TTL dos dados
+    ctx, cancel := context.WithCancel(context.Background())
+    defer cancel()
+
+    // Carregar configurações do .env
+    config, err := configs.LoadConfig(".")
+    if err != nil {
+        panic(err)
+    }
+
+    // Criar configuração do rate limiter
+    rateLimiterConfig := ratelimiter.NewRateLimiterConfig(
+        config.RateLimiterMaxRequests,
+        config.ParseTimerDuration(config.RateLimiterTimeDelay),
+        config.RateLimiterTokenMaxRequests,
+        config.ParseTimerDuration(config.RateLimiterTokenTimeDelay),
+        ratelimiter.Memory,  // ou ratelimiter.Redis
+        config.RateLimiterRedisAddr,
+        config.ParseTimerDuration(config.RateLimiterCleanupInterval),
+        config.ParseTimerDuration(config.RateLimiterTTL),
     )
-    
-    // Criar router
-    router := ajun.NewRouter(ctx)
-    router.RateLimiter(config)
-    
+
+    // Criar router e aplicar middleware
+    ajunRouter := ajun.NewRouter(ctx)
+    ajunRouter.RateLimiter(rateLimiterConfig)
+
     // Adicionar handlers
-    router.HandleFunc("/api/resource", yourHandler)
-    
+    ajunRouter.HandleFunc("/health", healthHandler)
+    ajunRouter.HandleFunc("/products", productsHandler)
+
     // Iniciar servidor
-    http.ListenAndServe(":8080", router.Handler)
+    fmt.Println("Starting web server on port", config.ServerPort)
+    http.ListenAndServe(config.ServerPort, ajunRouter.Handler)
+}
+
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+    w.WriteHeader(http.StatusOK)
+    w.Write([]byte(`{"status":"OK"}`))
 }
 
 // Exemplo com backend Redis
-func mainWithRedis() {
-    ctx := context.Background()
-    
-    // Configurar rate limiter com Redis
-    config := ratelimiter.NewRateLimiterConfig(
-        100,                    // limite por IP
-        time.Minute,            // delay de bloqueio IP
-        200,                    // limite por token
-        time.Minute,            // delay de bloqueio token
-        ratelimiter.Redis,      // backend Redis
-        "localhost:6379",       // endereço do Redis
-        10*time.Minute,         // intervalo de cleanup
-        1*time.Hour,            // TTL dos dados
-    )
-    
-    router := ajun.NewRouter(ctx)
-    router.RateLimiter(config)
-    
-    // Adicionar handlers
-    router.HandleFunc("/api/resource", yourHandler)
-    
-    // Iniciar servidor
-    http.ListenAndServe(":8080", router.Handler)
-}
+// No main.go, altere a linha 25 para:
+rateLimiterConfig := ratelimiter.NewRateLimiterConfig(
+    config.RateLimiterMaxRequests,
+    config.ParseTimerDuration(config.RateLimiterTimeDelay),
+    config.RateLimiterTokenMaxRequests,
+    config.ParseTimerDuration(config.RateLimiterTokenTimeDelay),
+    ratelimiter.Redis,  // ← Altere aqui para usar Redis
+    config.RateLimiterRedisAddr,  // Endereço do .env
+    config.ParseTimerDuration(config.RateLimiterCleanupInterval),
+    config.ParseTimerDuration(config.RateLimiterTTL),
+)
+
+// Configure o .env:
+// RATE_LIMITER_REDIS_ADDR=localhost:6379
 ```
 
 ## 📡 Exemplos de Requisições
@@ -208,6 +212,7 @@ You have reached the maximum number of requests or actions allowed within a cert
 │           ├── ratelimiter.go    # Lógica principal do rate limiter
 │           ├── ratelimiter_test.go
 │           ├── storage.go        # Camada de storage com cleanup
+│           ├── storage_test.go   # Testes de storage
 │           ├── interface.go      # Backend interface (Strategy)
 │           ├── memory.go         # Implementação in-memory
 │           ├── memory_test.go    # Testes do backend memory
@@ -216,11 +221,18 @@ You have reached the maximum number of requests or actions allowed within a cert
 │           └── types.go          # ClientIPData struct
 ├── cmd/
 │   ├── configs/
-│   │   └── configs.go            # Carregamento de configurações
+│   │   └── configs.go            # Carregamento e validação de configs
 │   └── server/
-│       └── main.go               # Entry point
-└── api/
-    └── health.http               # Exemplos de requisições HTTP
+│       ├── main.go               # Entry point
+│       └── .env_example          # Exemplo de configuração
+├── internal/
+│   └── infra/
+│       └── api/
+│           └── handlers.go       # HTTP handlers (health, products)
+├── api/
+│   └── health.http               # Exemplos de requisições HTTP
+└── scripts/
+    └── test_rate_limit.sh        # Script de teste de stress
 ```
 
 ### Componentes Principais
