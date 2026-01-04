@@ -12,7 +12,6 @@ type Storage struct {
 	backend     Backend
 	timeCleanIn time.Duration
 	ttl         time.Duration
-	clients     map[string]*ClientIPData
 }
 
 func NewStorage(ctx context.Context, backend Backend, timeCleanIn time.Duration, ttl time.Duration) *Storage {
@@ -20,7 +19,6 @@ func NewStorage(ctx context.Context, backend Backend, timeCleanIn time.Duration,
 		backend:     backend,
 		timeCleanIn: timeCleanIn,
 		ttl:         ttl,
-		clients:     make(map[string]*ClientIPData),
 	}
 
 	go s.StartCleanupWorker(ctx)
@@ -32,13 +30,13 @@ func (s *Storage) AddClientIP(clientIP string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, exists := s.clients[clientIP]
-	if !exists {
+	data, err := s.backend.Get(clientIP)
+	if err != nil {
 		data = &ClientIPData{}
-		s.clients[clientIP] = data
 	}
 	data.Count++
 	data.Time = time.Now()
+
 	s.backend.Set(clientIP, data)
 }
 
@@ -46,13 +44,14 @@ func (s *Storage) DisableClientIP(clientIP string, duration time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	data, exists := s.clients[clientIP]
-	if !exists {
-		data = &ClientIPData{Time: time.Now()}
-		s.clients[clientIP] = data
+	data, err := s.backend.Get(clientIP)
+	if err != nil {
+		data = &ClientIPData{}
 	}
-
+	data.Count++
+	data.Time = time.Now()
 	data.DisableUntil = time.Now().Add(duration)
+
 	s.backend.Set(clientIP, data)
 }
 
@@ -60,11 +59,11 @@ func (s *Storage) GetTimeDisabledClientIP(clientIP string) (time.Time, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// data, exists := s.clients[clientIP]
 	data, err := s.backend.Get(clientIP)
 	if err != nil {
 		return time.Time{}, false
 	}
+
 	return data.DisableUntil, true
 }
 
@@ -84,9 +83,14 @@ func (s *Storage) ListClientIPs() map[string]int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	data, err := s.backend.List()
+	if err != nil {
+		return nil
+	}
+
 	clientIPs := make(map[string]int)
-	for ip, data := range s.clients {
-		clientIPs[ip] = data.Count
+	for ip, d := range data {
+		clientIPs[ip] = d.Count
 	}
 	return clientIPs
 }
@@ -95,8 +99,6 @@ func (s *Storage) ResetClientIP(clientIP string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// delete(s.clients, clientIP)
-	delete(s.clients, clientIP)
 	s.backend.Delete(clientIP)
 }
 
@@ -104,7 +106,6 @@ func (s *Storage) ResetDataClientIPs() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.clients = make(map[string]*ClientIPData)
 	s.backend.Clear()
 }
 
@@ -130,9 +131,15 @@ func (s *Storage) cleanupOldData(ttl time.Duration) {
 	now := time.Now()
 	count := 0
 
-	for ip, data := range s.clients {
-		if data.DisableUntil.Before(now) && now.Sub(data.Time) > ttl {
-			delete(s.clients, ip)
+	data, err := s.backend.List()
+	if err != nil {
+		log.Printf("Erro ao listar dados para limpeza: %v\n", err)
+		return
+	}
+
+	for ip, d := range data {
+		if d.DisableUntil.Before(now) && now.Sub(d.Time) > ttl {
+			s.backend.Delete(ip)
 			count++
 		}
 	}

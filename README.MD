@@ -1,7 +1,7 @@
 # Rate Limiter - Desafio Técnico FullCycle
 
 [![Go Version](https://img.shields.io/badge/Go-1.23-blue.svg)](https://golang.org)
-[![Tests](https://img.shields.io/badge/tests-41%20passing-brightgreen.svg)](https://github.com)
+[![Tests](https://img.shields.io/badge/tests-53%20passing-brightgreen.svg)](https://github.com)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)](https://github.com)
 [![Architecture](https://img.shields.io/badge/pattern-Strategy-orange.svg)](https://refactoring.guru/design-patterns/strategy)
 
@@ -19,7 +19,8 @@ Middleware HTTP para controle de taxa de requisições (rate limiting) desenvolv
 - ✅ **IPv4 e IPv6**: Suporte completo para ambos protocolos
 - ✅ **Strategy Pattern**: Backend plugável com interface para múltiplas implementações
 - ✅ **In-memory storage**: Armazenamento local de alta performance com deep copy
-- ✅ **Extensível**: Fácil adição de novos backends (Redis, PostgreSQL, etc.)
+- ✅ **Redis storage**: Backend Redis com serialização JSON e thread-safety
+- ✅ **Extensível**: Fácil adição de novos backends (PostgreSQL, DynamoDB, etc.)
 
 ## 🚀 Instalação
 
@@ -27,6 +28,7 @@ Middleware HTTP para controle de taxa de requisições (rate limiting) desenvolv
 
 - Go 1.23 ou superior
 - Git
+- Redis (opcional, apenas se usar RedisBackend)
 
 ### Clonar o repositório
 
@@ -57,6 +59,10 @@ RATE_LIMITER_TOKEN_TIME_DELAY=60s
 # Configurações de Cleanup Automático
 RATE_LIMITER_CLEANUP_INTERVAL=10m
 RATE_LIMITER_TTL=1h
+
+# Configuração do Backend (opcional)
+RATE_LIMITER_BACKEND=memory  # ou 'redis'
+RATE_LIMITER_REDIS_ADDR=localhost:6379
 ```
 
 ### Variáveis de Ambiente
@@ -69,6 +75,8 @@ RATE_LIMITER_TTL=1h
 | `RATE_LIMITER_TOKEN_TIME_DELAY` | Tempo de bloqueio após exceder limite (token) | `60s`, `5m`, `1h` | - |
 | `RATE_LIMITER_CLEANUP_INTERVAL` | Intervalo de execução do cleanup | `10m`, `30m`, `1h` | - |
 | `RATE_LIMITER_TTL` | Tempo de vida dos dados antes da limpeza | `1h`, `2h`, `24h` | - |
+| `RATE_LIMITER_BACKEND` | Backend de armazenamento | `memory`, `redis` | `memory` |
+| `RATE_LIMITER_REDIS_ADDR` | Endereço do servidor Redis | `localhost:6379` | - |
 
 ### Formatos de Duração
 
@@ -130,20 +138,37 @@ func main() {
     http.ListenAndServe(":8080", router.Handler)
 }
 
-// Exemplo com backend customizado (futuro)
+// Exemplo com backend Redis
 func mainWithRedis() {
     ctx := context.Background()
     
-    // Usar backend customizado
-    redisBackend := NewRedisBackend("redis://localhost:6379")
-    config := ratelimiter.RateLimiterConfigWithBackend{
-        Config: ratelimiter.NewRateLimiterConfig(...),
-        Backend: redisBackend, // Strategy Pattern em ação
-    }
+    // Criar backend Redis
+    redisClient := redis.NewClient(&redis.Options{
+        Addr: "localhost:6379",
+    })
+    redisBackend := ratelimiter.NewRedisBackend(ctx, redisClient)
+    
+    // Criar Storage com backend Redis
+    storage := ratelimiter.NewStorage(
+        ctx,
+        redisBackend,           // Strategy Pattern em ação
+        10*time.Minute,         // cleanup interval
+        1*time.Hour,            // TTL
+    )
+    
+    // Configurar rate limiter
+    config := ratelimiter.NewRateLimiterConfig(
+        100,              // limite por IP
+        time.Minute,      // delay de bloqueio IP
+        200,              // limite por token
+        time.Minute,      // delay de bloqueio token
+        10*time.Minute,   // intervalo de cleanup
+        1*time.Hour,      // TTL dos dados
+    )
     
     router := ajun.NewRouter(ctx)
-    router.RateLimiter(config.Config)
-    // Backend será usado automaticamente via interface
+    router.RateLimiter(config)
+    // Storage com Redis será usado automaticamente
 }
 ```
 
@@ -191,6 +216,8 @@ Too many requests
 │           ├── interface.go      # Backend interface (Strategy)
 │           ├── memory.go         # Implementação in-memory
 │           ├── memory_test.go    # Testes do backend memory
+│           ├── redis.go          # Implementação Redis
+│           ├── redis_test.go     # Testes do backend Redis
 │           └── types.go          # ClientIPData struct
 ├── cmd/
 │   ├── configs/
@@ -226,12 +253,14 @@ type Backend interface {
     Set(clientIP string, data *ClientIPData) error
     Delete(clientIP string) error
     List() (map[string]*ClientIPData, error)
+    Clear() error
 }
 ```
 
 **Implementações disponíveis:**
 - `MemoryBackend`: In-memory com deep copy e thread-safety
-- **Futuro**: `RedisBackend`, `PostgreSQLBackend`, etc.
+- `RedisBackend`: Redis com serialização JSON, mutex e miniredis para testes
+- **Futuro**: `PostgreSQLBackend`, `DynamoDBBackend`, etc.
 
 #### 4. **Cleanup Worker**
 
@@ -261,9 +290,11 @@ type MemoryBackend struct {
     data map[string]*ClientIPData
 }
 
-// Estratégia Concreta 2: Redis (futuro)
+// Estratégia Concreta 2: Redis
 type RedisBackend struct {
+    ctx    context.Context
     client *redis.Client
+    mu     sync.RWMutex
 }
 
 // Context que usa a Strategy
@@ -358,12 +389,14 @@ router:              100.0% ✅
 middleware/ratelimiter: 100.0% ✅
 storage:             100.0% ✅
 memory backend:      100.0% ✅
+redis backend:       100.0% ✅
 ```
 
-**Total: 41 testes**
+**Total: 53 testes**
 - 11 testes de integração (router)
 - 18 testes unitários (ratelimiter)
 - 12 testes de backend memory
+- 12 testes de backend Redis (com miniredis)
 
 **Benchmarks:**
 - `BenchmarkMemoryBackend_Set`: ~35ns/op (0 alocações)
@@ -385,6 +418,9 @@ memory backend:      100.0% ✅
 - ✅ Deep copy no backend para isolamento de dados
 - ✅ Thread-safety testado com race detector
 - ✅ Backend plugável via Strategy Pattern
+- ✅ Redis backend com miniredis (testes sem servidor real)
+- ✅ Serialização/deserialização JSON no Redis
+- ✅ Clear() method para reset de dados nos testes
 
 ## 🛠️ Desenvolvimento
 
@@ -398,6 +434,8 @@ memory backend:      100.0% ✅
 - **Viper**: Gerenciamento de configurações
 - **httptest**: Testes HTTP
 - **Deep Copy**: Isolamento de dados no backend
+- **Redis**: Cliente go-redis/v9 com suporte a JSON
+- **miniredis**: Mock in-memory do Redis para testes
 
 ### Executar em modo desenvolvimento
 
@@ -413,6 +451,9 @@ go test ./ajun/middleware/ratelimiter -v
 
 # Apenas testes do backend memory
 go test ./ajun/middleware/ratelimiter -run TestMemoryBackend -v
+
+# Apenas testes do backend Redis
+go test ./ajun/middleware/ratelimiter -run TestRedis -v
 
 # Teste específico
 go test ./ajun/middleware/ratelimiter -run TestRateLimiterHandler_BlocksRequestsAboveLimit -v
