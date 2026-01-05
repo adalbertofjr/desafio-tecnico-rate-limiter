@@ -46,13 +46,13 @@ go mod download
 
 ## ⚙️ Configuração
 
-Copie o arquivo de exemplo para criar seu `.env`:
+Copie o arquivo de exemplo para criar seu `.env` na raiz do projeto:
 
 ```bash
-cp cmd/server/.env_example cmd/server/.env
+cp .env_example .env
 ```
 
-Edite `cmd/server/.env` conforme necessário:
+Edite `.env` conforme necessário:
 
 ```env
 # Configurações do Server
@@ -368,8 +368,9 @@ Taxa de bloqueio: 90.00%
 │   ├── configs/
 │   │   └── configs.go            # Carregamento e validação de configs
 │   └── server/
-│       ├── main.go               # Entry point
-│       └── .env_example          # Exemplo de configuração
+│       └── main.go               # Entry point
+├── .env                          # Configurações (não versionado)
+├── .env_example                  # Exemplo de configuração
 ├── internal/
 │   └── infra/
 │       └── api/

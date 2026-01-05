@@ -26,7 +26,10 @@ type Config struct {
 func LoadConfig(path string) (*Config, error) {
 	var config *Config
 
-	viper.SetConfigFile(".env")
+	viper.SetConfigName(".env")
+	viper.SetConfigType("env")
+	viper.AddConfigPath(".")
+	viper.AddConfigPath("./cmd/server")
 	viper.AutomaticEnv()
 
 	viper.SetDefault("RATE_LIMITER_REDIS_ADDR", "localhost:6379")

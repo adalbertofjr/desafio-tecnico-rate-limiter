@@ -8,7 +8,7 @@ services:
     ports:
       - "8080:8080"
     env_file:
-      - cmd/server/.env
+      - .env
     environment:
       - RATE_LIMITER_REDIS_ADDR=redis:6379
     depends_on:
