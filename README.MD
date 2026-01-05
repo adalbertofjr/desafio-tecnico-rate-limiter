@@ -688,17 +688,23 @@ docker-compose exec app sh
 ## 📝 Exemplo de .env
 
 ```env
-# Rate Limiting por IP
-RATE_LIMITER_MAX_REQUESTS=100
-RATE_LIMITER_TIME_DELAY=1m
+# Configurações do Server
+SERVER_PORT=:8080
 
-# Rate Limiting por API Token
-RATE_LIMITER_TOKEN_MAX_REQUESTS=200
-RATE_LIMITER_TOKEN_TIME_DELAY=1m
+# Configurações de Rate Limiting por IP
+RATE_LIMITER_MAX_REQUESTS=5
+RATE_LIMITER_TIME_DELAY=20s
 
-# Cleanup Automático
-RATE_LIMITER_CLEANUP_INTERVAL=10m
-RATE_LIMITER_TTL=1h
+# Configurações de Rate Limiting por Token
+RATE_LIMITER_TOKEN_MAX_REQUESTS=7
+RATE_LIMITER_TOKEN_TIME_DELAY=10s
+
+# Configurações de Cleanup Automático
+RATE_LIMITER_CLEANUP_INTERVAL=30s
+RATE_LIMITER_TTL=2m
+
+# Configuração do Backend Para Redis (opcional caso use Memory)
+RATE_LIMITER_REDIS_ADDR=localhost:6379
 ```
 
 ## 🤝 Contribuindo
