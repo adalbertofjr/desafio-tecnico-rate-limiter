@@ -81,11 +81,16 @@ func (rl *RateLimiter) getClientIP(r *http.Request) string {
 
 	// 2. Fallback: RemoteAddr (conexão direta)
 	ip := r.RemoteAddr
+
+	// Tentar remover a porta com SplitHostPort
 	clientIP, _, err := net.SplitHostPort(ip)
 	if err != nil {
-		// Se falhar, retorna o IP como está (pode ser IPv6 sem porta)
-		return ip
+		// Se falhar (ex: IPv6 sem porta como "::1"), retorna o IP original
+		// mas remove colchetes se existirem (ex: "[::1]" -> "::1")
+		clientIP = strings.Trim(ip, "[]")
+		return clientIP
 	}
+
 	return clientIP
 }
 

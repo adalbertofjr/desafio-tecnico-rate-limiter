@@ -28,8 +28,11 @@ func LoadConfig(path string) (*Config, error) {
 
 	viper.SetConfigName(".env")
 	viper.SetConfigType("env")
-	viper.AddConfigPath(".")
-	viper.AddConfigPath("./cmd/server")
+	viper.AddConfigPath(path)           // Diretório passado como parâmetro
+	viper.AddConfigPath(".")            // Diretório atual
+	viper.AddConfigPath("..")           // Diretório pai (caso execute de cmd/server)
+	viper.AddConfigPath("../..")        // Dois níveis acima (caso execute de scripts)
+	viper.AddConfigPath("./cmd/server") // Fallback antigo
 	viper.AutomaticEnv()
 
 	viper.SetDefault("RATE_LIMITER_REDIS_ADDR", "localhost:6379")

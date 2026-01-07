@@ -36,7 +36,9 @@ func main() {
 
 	addrServer := config.ServerPort
 	fmt.Println("Starting web server on port", addrServer)
-	http.ListenAndServe(addrServer, ajunRouter.Handler)
+	if err := http.ListenAndServe(addrServer, ajunRouter.Handler); err != nil {
+		panic(fmt.Sprintf("Failed to start server: %v", err))
+	}
 }
 
 func loadConfigs() *configs.Config {
