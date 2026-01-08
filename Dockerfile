@@ -24,7 +24,7 @@ WORKDIR /root/
 COPY --from=builder /app/server .
 
 # Copiar arquivo .env de exemplo (será sobrescrito por env_file no compose)
-COPY cmd/server/.env_example .env
+COPY --from=builder /app/.env_example .env
 
 EXPOSE 8080
 
